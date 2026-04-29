@@ -45,6 +45,9 @@ These are strict operating rules for this project.
   `.env.example`.
 - Do not add auto-apply behavior.
 - Do not add Indeed support unless the user explicitly re-adds it.
+- Protect against rate limits and accidental spend. Use conservative limits,
+  persisted crawl state, idempotent retries, and explicit user approval before
+  increasing crawl volume, schedule frequency, or scoring volume.
 
 ## Testing Rules
 
@@ -61,6 +64,10 @@ These are strict operating rules for this project.
 - Keep prompts explicit and structured.
 - Request parseable structured output.
 - Store score, reason, model name, and scoring timestamp.
+- Do not rescore jobs that already have a current score unless the user approves
+  a rescoring run.
+- Cap live scoring runs by default so unexpected crawl volume cannot burn
+  credits.
 - Add prompt/eval fixtures before changing scoring behavior materially.
 
 ## Manual Command Template

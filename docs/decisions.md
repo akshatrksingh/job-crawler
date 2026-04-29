@@ -10,6 +10,8 @@ grows.
 - The project must not auto-apply to jobs.
 - The project should find jobs, score them against the user's resume, and create
   a daily Markdown digest.
+- The daily digest should be simple and scannable: company, job title, link, and
+  location are enough.
 - The digest should prioritize the best jobs from each run rather than rely on a
   hard score cutoff. A threshold can be used as a starting heuristic, but it
   should adapt if the market is sparse or unusually strong.
@@ -44,6 +46,20 @@ Discovery requirements:
 - Store discovered source slugs in SQLite with enough metadata to audit where
   they came from.
 
+## Rate Limits and Cost Control
+
+- Avoid aggressive crawling. The crawler should run with conservative per-source
+  limits, delays, and retry behavior.
+- Persist crawl timestamps and discovered sources so reruns do not repeatedly hit
+  the same endpoints unnecessarily.
+- Prefer incremental crawling and cached state over full recrawls.
+- Keep live-network smoke tests small and explicit.
+- Do not spend OpenAI credits on jobs that were already scored.
+- Batch or cap scoring work per run so a bad crawl cannot create an unexpected
+  bill.
+- Any increase to crawl frequency, query breadth, scoring volume, or scheduled
+  execution needs user approval.
+
 ## Storage
 
 - SQLite is the source of truth.
@@ -73,8 +89,10 @@ Discovery requirements:
 - Generate one clean Markdown file per day.
 - Prioritize the strongest jobs from the run. Prefer an adaptive threshold or
   top-N strategy over a rigid score cutoff.
-- Each digest item should include company, title, location, source, score,
-  reason, and direct job URL.
+- Each digest item should include only company, job title, direct job URL, and
+  location by default.
+- Scores and internal match reasons should stay in SQLite unless the user asks to
+  show them.
 - Avoid repeated jobs across days unless a future decision explicitly allows
   resurfacing.
 
@@ -130,3 +148,12 @@ Impact: Fewer source-specific legal/rate-limit/product concerns; simpler source
 priority.
 Temporary or permanent: Permanent unless the user re-adds Indeed later.
 Follow-up: Remove any future Indeed code paths if they appear.
+
+Decision changed: Digest detail level.
+Previous plan: Include score and match reason in each digest item.
+New plan: Show only company, job title, link, and location by default.
+Reason: User wants a compact list without summaries or "why it matches" text.
+Impact: Scores remain internal for ranking/filtering but are not shown in the
+default digest.
+Temporary or permanent: Permanent unless the user asks for richer digest output.
+Follow-up: Keep digest renderer minimal in Stage 8.

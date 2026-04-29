@@ -30,12 +30,13 @@ git push
 
 ## Stage 1: Operating Docs
 
-Status: In progress.
+Status: Done.
 
 Goal:
 
 - Make project decisions, strict instructions, and stage flow explicit.
 - Remove Indeed from scope.
+- Record rate-limit, cost-control, and simple-digest requirements.
 
 Test before push:
 
@@ -53,7 +54,7 @@ git push
 
 ## Stage 2: SQLite Schema and Dedupe
 
-Status: Planned.
+Status: Done.
 
 Goal:
 
@@ -66,6 +67,7 @@ End-to-end test:
 - Insert fixture jobs from two fake sources.
 - Confirm duplicate inserts do not create duplicate job rows.
 - Confirm new jobs can be selected for scoring.
+- Confirm crawl state can record timestamps for rate-limit-friendly reruns.
 
 Push after:
 
@@ -226,13 +228,15 @@ Status: Planned.
 Goal:
 
 - Generate `digests/YYYY-MM-DD.md`.
-- Include only jobs with score `>= JOB_CRAWLER_MIN_SCORE`.
+- Include a simple list of company, job title, link, and location.
+- Use adaptive selection/top-N rather than a fixed score-only cutoff.
 
 End-to-end test:
 
 - Seed scored fixture jobs.
 - Generate a digest.
-- Confirm low-scoring jobs are excluded and high-scoring jobs are present.
+- Confirm strongest fixture jobs are present.
+- Confirm digest output does not include match summaries by default.
 
 Push after:
 
