@@ -68,6 +68,37 @@ def test_render_dashboard_has_pagination_and_no_filters_or_hard_limit() -> None:
     assert "Seattle, WA" in html
 
 
+def test_select_dashboard_jobs_interleaves_location_buckets() -> None:
+    today = date(2026, 4, 29)
+    jobs = [
+        make_job(
+            f"Software Engineer SF {index}",
+            f"SF Co {index}",
+            "San Francisco",
+            datetime(2026, 4, 28, tzinfo=UTC),
+        )
+        for index in range(8)
+    ] + [
+        make_job(
+            "Software Engineer Seattle",
+            "Seattle Co",
+            "Seattle, WA",
+            datetime(2026, 4, 28, tzinfo=UTC),
+        ),
+        make_job(
+            "Software Engineer Boston",
+            "Boston Co",
+            "Boston, US",
+            datetime(2026, 4, 28, tzinfo=UTC),
+        ),
+    ]
+
+    selected = select_dashboard_jobs(jobs, today=today)
+
+    assert [job.company for job in selected[:3]] == ["SF Co 0", "Boston Co", "Seattle Co"]
+    assert [job.company for job in selected[:4]].count("SF Co 0") == 1
+
+
 def test_render_dashboard_excludes_senior_roles() -> None:
     today = date(2026, 4, 29)
     jobs = [
@@ -89,6 +120,96 @@ def test_render_dashboard_excludes_senior_roles() -> None:
 
     assert "Senior Co" not in html
     assert "Junior Co" in html
+
+
+def test_render_dashboard_excludes_non_us_only_locations() -> None:
+    today = date(2026, 4, 29)
+    html = render_dashboard(
+        [
+            make_job(
+                "AI Engineer",
+                "US Co",
+                "Seattle, WA",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+            make_job(
+                "AI Engineer",
+                "Remote Co",
+                "Remote",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+            make_job(
+                "AI Engineer",
+                "UK Co",
+                "Remote - United Kingdom",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+            make_job(
+                "AI Engineer",
+                "China Co",
+                "Shanghai, Remote",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+        ],
+        today=today,
+    )
+
+    assert "US Co" in html
+    assert "Remote Co" in html
+    assert "UK Co" not in html
+    assert "China Co" not in html
+
+
+def test_render_dashboard_excludes_non_target_roles() -> None:
+    today = date(2026, 4, 29)
+    html = render_dashboard(
+        [
+            make_job(
+                "Machine Learning Engineer",
+                "ML Co",
+                "Boston, US",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+            make_job(
+                "Recruiter",
+                "Recruiting Co",
+                "Seattle, WA",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+            make_job(
+                "Growth Operations Associate",
+                "Growth Co",
+                "San Francisco, CA",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+            make_job(
+                "Cloud Security Engineer",
+                "Security Co",
+                "Seattle, WA",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+            make_job(
+                "Support Engineer",
+                "Support Co",
+                "Remote",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+            make_job(
+                "Social Media Manager",
+                "Social Co",
+                "New York, NY",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+        ],
+        today=today,
+    )
+
+    assert "ML Co" in html
+    assert "Recruiting Co" not in html
+    assert "Growth Co" not in html
+    assert "Security Co" not in html
+    assert "Support Co" not in html
+    assert "Social Co" not in html
 
 
 def test_render_dashboard_excludes_hn_jobs() -> None:

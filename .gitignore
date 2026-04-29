@@ -10,6 +10,8 @@ __pycache__/
 htmlcov/
 data/*.db
 data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
 data/raw/*
 data/processed/*
 digests/*.md

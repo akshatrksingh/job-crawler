@@ -13,9 +13,10 @@ class LocationTier(IntEnum):
 
     PRIMARY = 0
     MAJOR_US_CITY = 1
-    REMOTE_US = 2
-    OTHER_US = 3
-    UNKNOWN_OR_OTHER = 4
+    OTHER_US = 2
+    REMOTE_US = 3
+    GENERIC_REMOTE = 4
+    NON_US_OR_UNKNOWN = 5
 
 
 PRIMARY_LOCATION_KEYWORDS = (
@@ -28,20 +29,36 @@ PRIMARY_LOCATION_KEYWORDS = (
 
 MAJOR_US_CITY_KEYWORDS = (
     "seattle",
+    "seatle",
     "boston",
     "austin",
     "los angeles",
+    "la",
     "chicago",
     "denver",
     "washington",
     "dc",
     "atlanta",
     "miami",
+    "dallas",
+    "houston",
+    "phoenix",
+    "portland",
+    "minneapolis",
+    "nashville",
+    "charlotte",
+    "salt lake city",
+    "provo",
     "raleigh",
     "durham",
     "pittsburgh",
     "philadelphia",
     "san diego",
+    "san jose",
+    "palo alto",
+    "mountain view",
+    "sunnyvale",
+    "foster city",
 )
 
 ROLE_KEYWORDS = (
@@ -49,6 +66,7 @@ ROLE_KEYWORDS = (
     "machine learning engineer",
     "ml",
     "ml engineer",
+    "ml ops",
     "ai engineer",
     "artificial intelligence",
     "agent",
@@ -70,6 +88,79 @@ ROLE_KEYWORDS = (
     "infra",
     "data engineer",
     "research engineer",
+    "data scientist",
+    "data science",
+    "applied scientist",
+    "forward deployed engineer",
+    "forward deployed software engineer",
+)
+
+TARGET_TITLE_KEYWORDS = (
+    "machine learning",
+    "ml engineer",
+    "ai engineer",
+    "applied ai",
+    "artificial intelligence",
+    "software engineer",
+    "software development engineer",
+    "swe",
+    "sde",
+    "fullstack",
+    "full stack",
+    "full-stack",
+    "frontend engineer",
+    "front end engineer",
+    "backend engineer",
+    "back end engineer",
+    "platform engineer",
+    "infrastructure engineer",
+    "cloud platform engineer",
+    "data scientist",
+    "data science",
+    "applied scientist",
+    "research engineer",
+    "forward deployed software engineer",
+    "fdse",
+    "autonomy engineer",
+    "computer vision",
+    "cuda",
+    "kernel engineer",
+    "embedded software",
+)
+
+NON_TARGET_TITLE_KEYWORDS = (
+    "account executive",
+    "associate buyer",
+    "business development",
+    "community",
+    "customer",
+    "cyber",
+    "designer",
+    "design",
+    "electrical engineer",
+    "field engineer",
+    "field marketer",
+    "finance",
+    "growth",
+    "gtm",
+    "instructor",
+    "legal",
+    "marketer",
+    "marketing",
+    "mechanical engineer",
+    "operations",
+    "product manager",
+    "production technician",
+    "proposal",
+    "recruiter",
+    "recruiting",
+    "sales",
+    "security",
+    "social media",
+    "solutions engineer",
+    "support",
+    "technician",
+    "workplace",
 )
 
 ROLE_FILTER_OPTIONS = (
@@ -120,6 +211,81 @@ SENIOR_KEYWORDS = (
     "head of",
 )
 
+US_LOCATION_KEYWORDS = (
+    "united states",
+    "usa",
+    "u.s.",
+    " us ",
+    ", us",
+    "remote (us",
+    "remote (united states",
+    "us remote",
+    "new york",
+    "nyc",
+    "san francisco",
+    "sf",
+    "bay area",
+    "seattle",
+    "seatle",
+    "boston",
+    "austin",
+    "los angeles",
+    "chicago",
+    "denver",
+    "washington",
+    "atlanta",
+    "miami",
+    "dallas",
+    "houston",
+    "phoenix",
+    "portland",
+    "minneapolis",
+    "nashville",
+    "charlotte",
+    "raleigh",
+    "durham",
+    "pittsburgh",
+    "philadelphia",
+    "san diego",
+    "san jose",
+    "palo alto",
+    "mountain view",
+    "sunnyvale",
+    "foster city",
+    "california",
+    "new jersey",
+    "ohio",
+    "texas",
+    "washington state",
+    "massachusetts",
+    "florida",
+    "illinois",
+    "colorado",
+    "georgia",
+    "north carolina",
+    "pennsylvania",
+)
+
+NON_US_LOCATION_KEYWORDS = (
+    "canada",
+    "toronto",
+    "montreal",
+    "vancouver",
+    "united kingdom",
+    "uk",
+    "london",
+    "england",
+    "europe",
+    "singapore",
+    "india",
+    "beijing",
+    "shanghai",
+    "shenzhen",
+    "china",
+    "buenos aires",
+    "argentina",
+)
+
 
 @dataclass(frozen=True)
 class RankedJob:
@@ -146,13 +312,15 @@ def rank_job(job: JobPosting) -> RankedJob:
     if any(keyword in combined for keyword in EARLY_CAREER_KEYWORDS):
         score += 25
     if tier == LocationTier.PRIMARY:
-        score += 20
+        score += 13
     elif tier == LocationTier.MAJOR_US_CITY:
-        score += 14
-    elif tier == LocationTier.REMOTE_US:
         score += 12
     elif tier == LocationTier.OTHER_US:
-        score += 6
+        score += 10
+    elif tier == LocationTier.REMOTE_US:
+        score += 4
+    elif tier == LocationTier.GENERIC_REMOTE:
+        score += 1
     if excluded:
         score -= 100
 
@@ -166,6 +334,14 @@ def is_senior_role(job: JobPosting) -> bool:
     return any(keyword in title for keyword in SENIOR_KEYWORDS)
 
 
+def is_target_role(job: JobPosting) -> bool:
+    """Return true for title-level roles aligned to the user's target search."""
+    title = job.title.lower()
+    if any(keyword in title for keyword in NON_TARGET_TITLE_KEYWORDS):
+        return False
+    return any(keyword in title for keyword in TARGET_TITLE_KEYWORDS)
+
+
 def role_category(title: str) -> str:
     """Classify a title into a stable dashboard role bucket."""
     value = title.lower()
@@ -173,14 +349,32 @@ def role_category(title: str) -> str:
         return "ML"
     if "ai" in value or "artificial intelligence" in value or "agent" in value:
         return "AI"
+    if "data scientist" in value or "data science" in value:
+        return "Data Science"
     if "data" in value:
         return "Data"
-    if "infra" in value or "platform" in value:
+    if "infra" in value or "platform" in value or "cloud" in value:
         return "Infrastructure"
     if "backend" in value or "back end" in value:
         return "Backend"
-    if "swe" in value or "software" in value or "sde" in value:
+    if (
+        "swe" in value
+        or "software" in value
+        or "sde" in value
+        or "fullstack" in value
+        or "full stack" in value
+        or "frontend" in value
+        or "front end" in value
+    ):
         return "SWE/SDE"
+    if (
+        "autonomy" in value
+        or "computer vision" in value
+        or "embedded" in value
+        or "cuda" in value
+        or "kernel" in value
+    ):
+        return "Engineering"
     if "product" in value:
         return "Product"
     if "design" in value:
@@ -189,18 +383,32 @@ def role_category(title: str) -> str:
 
 
 def location_tier(location: str | None) -> LocationTier:
-    """Classify a location with NYC/SF first, then major US cities."""
+    """Classify a location with concrete US cities ahead of remote roles."""
     if not location:
-        return LocationTier.UNKNOWN_OR_OTHER
-    value = location.lower()
+        return LocationTier.NON_US_OR_UNKNOWN
+    value = f" {location.lower()} "
     if any(keyword in value for keyword in PRIMARY_LOCATION_KEYWORDS):
         return LocationTier.PRIMARY
     if any(keyword in value for keyword in MAJOR_US_CITY_KEYWORDS):
         return LocationTier.MAJOR_US_CITY
     if "remote" in value and ("us" in value or "usa" in value or "united states" in value):
         return LocationTier.REMOTE_US
-    if "remote" == value.strip():
-        return LocationTier.REMOTE_US
+    if value.strip() == "remote":
+        return LocationTier.GENERIC_REMOTE
     if any(token in value for token in ("united states", "usa", " us", ", us")):
         return LocationTier.OTHER_US
-    return LocationTier.UNKNOWN_OR_OTHER
+    return LocationTier.NON_US_OR_UNKNOWN
+
+
+def is_us_role(job: JobPosting) -> bool:
+    """Return true when a job is available in the US or is generic remote."""
+    location = (job.location or "").strip()
+    if not location:
+        return False
+    value = f" {location.lower()} "
+    has_us_signal = any(keyword in value for keyword in US_LOCATION_KEYWORDS)
+    if has_us_signal:
+        return True
+    if location.lower() == "remote":
+        return True
+    return False

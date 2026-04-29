@@ -8,7 +8,7 @@ from html import escape
 from pathlib import Path
 
 from job_crawler.crawlers.base import JobPosting
-from job_crawler.ranking import rank_job, role_category
+from job_crawler.ranking import is_target_role, is_us_role, rank_job, role_category
 
 
 @dataclass(frozen=True)
@@ -40,6 +40,10 @@ def select_dashboard_jobs(
             continue
         if job.source == "yc" and "/jobs/role/" in job.url:
             continue
+        if not is_target_role(job):
+            continue
+        if not is_us_role(job):
+            continue
         ranked = rank_job(job)
         if ranked.excluded:
             continue
@@ -58,7 +62,7 @@ def select_dashboard_jobs(
                 rank_score=ranked.score,
             )
         )
-    return sorted(
+    ranked = sorted(
         selected,
         key=lambda job: (
             -_date_to_ordinal(job.visible_date),
@@ -67,6 +71,7 @@ def select_dashboard_jobs(
             job.title.lower(),
         ),
     )
+    return _interleave_location_buckets(ranked)
 
 
 def render_dashboard(
@@ -306,7 +311,7 @@ def render_dashboard(
     }});
     refresh.addEventListener("click", async () => {{
       refresh.disabled = true;
-      status.textContent = "Refreshing YC...";
+      status.textContent = "Refreshing Ashby sources...";
       try {{
         const response = await fetch("/api/refresh", {{ method: "POST" }});
         if (!response.ok) throw new Error("refresh failed");
@@ -369,6 +374,50 @@ def _render_row(job: DashboardJob) -> str:
         f"<td>{source}</td>"
         "</tr>"
     )
+
+
+def _interleave_location_buckets(jobs: list[DashboardJob]) -> list[DashboardJob]:
+    """Keep high-ranked jobs while avoiding one metro dominating the first pages."""
+    buckets: dict[str, list[DashboardJob]] = {}
+    bucket_order: list[str] = []
+    for job in jobs:
+        bucket = _location_bucket(job.location)
+        if bucket not in buckets:
+            buckets[bucket] = []
+            bucket_order.append(bucket)
+        buckets[bucket].append(job)
+
+    interleaved: list[DashboardJob] = []
+    while any(buckets.values()):
+        for bucket in list(bucket_order):
+            if buckets[bucket]:
+                interleaved.append(buckets[bucket].pop(0))
+    return interleaved
+
+
+def _location_bucket(location: str) -> str:
+    value = location.lower()
+    bucket_keywords = (
+        ("seattle", ("seattle", "seatle")),
+        ("boston", ("boston", "cambridge")),
+        ("austin", ("austin",)),
+        ("denver", ("denver",)),
+        ("los-angeles", ("los angeles",)),
+        ("dc", ("washington", "d.c.", "dc")),
+        ("chicago", ("chicago",)),
+        ("atlanta", ("atlanta",)),
+        ("portland", ("portland",)),
+        ("raleigh-durham", ("raleigh", "durham", "chapel hill")),
+        ("sf-bay", ("san francisco", "sf", "bay area", "foster city", "sunnyvale")),
+        ("nyc", ("new york", "nyc")),
+        ("remote-us", ("united states", "usa", "remote us", "remote (united states)")),
+    )
+    for bucket, keywords in bucket_keywords:
+        if any(keyword in value for keyword in keywords):
+            return bucket
+    if value == "remote":
+        return "remote"
+    return "other-us"
 
 
 def _visible_date(job: JobPosting) -> date:

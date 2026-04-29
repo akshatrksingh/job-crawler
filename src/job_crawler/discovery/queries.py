@@ -5,9 +5,15 @@ from __future__ import annotations
 DEFAULT_ROLE_QUERIES = (
     "machine learning engineer",
     "ai engineer",
+    "applied ai engineer",
     "agentic ai engineer",
+    "data scientist",
+    "applied scientist",
     "software engineer new grad",
+    "software engineer university graduate",
     "software development engineer entry level",
+    "sde new grad",
+    "forward deployed software engineer",
 )
 
 DEFAULT_LOCATION_QUERIES = (
@@ -22,6 +28,23 @@ DEFAULT_LOCATION_QUERIES = (
     "Denver",
     "Washington DC",
     "Atlanta",
+    "Dallas",
+    "Houston",
+    "Miami",
+    "Raleigh",
+    "Durham",
+    "Philadelphia",
+    "Pittsburgh",
+    "San Diego",
+    "San Jose",
+    "Palo Alto",
+    "Mountain View",
+    "Foster City",
+    "Portland",
+    "Minneapolis",
+    "Nashville",
+    "Charlotte",
+    "Salt Lake City",
 )
 
 SOURCE_SITE_QUERIES = {

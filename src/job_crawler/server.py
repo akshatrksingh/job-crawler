@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from job_crawler.dashboard import render_dashboard
-from job_crawler.pipeline import refresh_yc
+from job_crawler.pipeline import refresh_jobs
 from job_crawler.storage import JobRepository, open_database
 
 
@@ -22,14 +22,14 @@ class DashboardServerConfig:
         output_path: Path,
         days: int,
         candidate_limit: int,
-        yc_limit: int,
+        ashby_limit: int,
         cooldown_hours: int,
     ) -> None:
         self.db_path = db_path
         self.output_path = output_path
         self.days = days
         self.candidate_limit = candidate_limit
-        self.yc_limit = yc_limit
+        self.ashby_limit = ashby_limit
         self.cooldown_hours = cooldown_hours
 
 
@@ -41,7 +41,7 @@ def run_dashboard_server(
     output_path: Path = Path("site/index.html"),
     days: int = 14,
     candidate_limit: int = 10_000,
-    yc_limit: int = 80,
+    ashby_limit: int = 100,
     cooldown_hours: int = 6,
 ) -> None:
     """Serve the local dashboard until interrupted."""
@@ -50,7 +50,7 @@ def run_dashboard_server(
         output_path=output_path,
         days=days,
         candidate_limit=candidate_limit,
-        yc_limit=yc_limit,
+        ashby_limit=ashby_limit,
         cooldown_hours=cooldown_hours,
     )
     handler = _build_handler(config)
@@ -78,18 +78,18 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
             if self.path != "/api/refresh":
                 self.send_error(HTTPStatus.NOT_FOUND)
                 return
-            result = refresh_yc(
+            result = refresh_jobs(
                 db_path=config.db_path,
                 output_path=config.output_path,
                 days=config.days,
                 candidate_limit=config.candidate_limit,
-                yc_limit=config.yc_limit,
+                ashby_limit=config.ashby_limit,
                 cooldown_hours=config.cooldown_hours,
             )
             payload = {
                 "ok": not result.errors,
                 "message": (
-                    "Fetched YC and refreshed dashboard."
+                    "Fetched stored Ashby sources and refreshed dashboard."
                     if result.refreshed
                     else "Refresh cooldown active."
                 ),

@@ -1,5 +1,13 @@
 from job_crawler.crawlers.base import JobPosting
-from job_crawler.ranking import LocationTier, is_senior_role, location_tier, rank_job, role_category
+from job_crawler.ranking import (
+    LocationTier,
+    is_senior_role,
+    is_target_role,
+    is_us_role,
+    location_tier,
+    rank_job,
+    role_category,
+)
 
 
 def make_job(title: str, location: str | None, description: str | None = None) -> JobPosting:
@@ -21,13 +29,14 @@ def test_location_tier_prioritizes_nyc_and_sf_first() -> None:
     assert location_tier("Boston, MA") == LocationTier.MAJOR_US_CITY
     assert location_tier("Austin, TX") == LocationTier.MAJOR_US_CITY
     assert location_tier("Remote (US)") == LocationTier.REMOTE_US
+    assert location_tier("Remote") == LocationTier.GENERIC_REMOTE
 
 
-def test_rank_job_prefers_major_us_city_over_unknown_when_role_fit_matches() -> None:
+def test_rank_job_prefers_us_city_over_generic_remote_when_role_fit_matches() -> None:
     seattle = rank_job(make_job("AI Engineer", "Seattle, WA", "Entry level role"))
-    unknown = rank_job(make_job("AI Engineer", "London", "Entry level role"))
+    remote = rank_job(make_job("AI Engineer", "Remote", "Entry level role"))
 
-    assert seattle.score > unknown.score
+    assert seattle.score > remote.score
     assert seattle.location_tier == LocationTier.MAJOR_US_CITY
 
 
@@ -49,3 +58,37 @@ def test_role_category_handles_target_role_variations() -> None:
     assert role_category("AI Engineer") == "AI"
     assert role_category("Software Development Engineer") == "SWE/SDE"
     assert role_category("Backend Platform Engineer") == "Infrastructure"
+    assert role_category("Data Scientist") == "Data Science"
+    assert role_category("Fullstack Engineer") == "SWE/SDE"
+    assert role_category("Autonomy Engineer, Computer Vision") == "Engineering"
+    assert role_category("CUDA Kernel Engineer") == "Engineering"
+
+
+def test_is_us_role_excludes_non_us_only_locations_but_keeps_us_and_generic_remote() -> None:
+    assert is_us_role(make_job("AI Engineer", "Seattle, WA"))
+    assert is_us_role(make_job("AI Engineer", "Seatle, Remote"))
+    assert is_us_role(make_job("AI Engineer", "New York, London"))
+    assert is_us_role(make_job("AI Engineer", "Remote"))
+    assert is_us_role(make_job("AI Engineer", "Remote (United States)"))
+    assert not is_us_role(make_job("AI Engineer", "Canada, Remote"))
+    assert not is_us_role(make_job("AI Engineer", "Remote - United Kingdom"))
+    assert not is_us_role(make_job("AI Engineer", "Shanghai, Remote"))
+    assert not is_us_role(make_job("AI Engineer", "Gdańsk, Poland, Remote"))
+
+
+def test_is_target_role_keeps_relevant_technical_roles_and_drops_noise() -> None:
+    assert is_target_role(make_job("Machine Learning Engineer", "Boston, US"))
+    assert is_target_role(make_job("Applied AI Engineer", "Austin"))
+    assert is_target_role(make_job("Software Engineer, ML Ops", "Atlanta"))
+    assert is_target_role(make_job("Software Development Engineer", "Seattle"))
+    assert is_target_role(make_job("Data Scientist", "Chicago"))
+    assert is_target_role(make_job("Forward Deployed Software Engineer", "Denver"))
+    assert is_target_role(make_job("Autonomy Engineer, Computer Vision", "Seattle"))
+    assert is_target_role(make_job("CUDA Kernel Engineer", "Boston"))
+    assert not is_target_role(make_job("Recruiter", "Seattle"))
+    assert not is_target_role(make_job("Product Manager, AI", "New York"))
+    assert not is_target_role(make_job("Growth Operations Associate", "San Francisco"))
+    assert not is_target_role(make_job("Cloud Security Engineer", "Seattle"))
+    assert not is_target_role(make_job("Support Engineer", "Remote"))
+    assert not is_target_role(make_job("Field Engineer", "Austin"))
+    assert not is_target_role(make_job("Social Media Manager", "New York"))

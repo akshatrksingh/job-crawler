@@ -1,8 +1,9 @@
 """Pipeline orchestration helpers."""
 
-from job_crawler.pipeline.refresh import RefreshResult, refresh_yc
+from job_crawler.pipeline.refresh import RefreshResult, refresh_jobs, refresh_yc
 
 __all__ = [
     "RefreshResult",
+    "refresh_jobs",
     "refresh_yc",
 ]

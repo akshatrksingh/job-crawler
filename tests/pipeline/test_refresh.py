@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from job_crawler.crawlers.base import JobPosting
-from job_crawler.pipeline import refresh_yc
+from job_crawler.pipeline import refresh_jobs, refresh_yc
 from job_crawler.storage import JobRepository, open_database
 
 
@@ -85,3 +85,35 @@ def test_refresh_yc_records_source_errors(tmp_path) -> None:
     assert result.inserted == 0
     assert result.errors == ["network issue"]
     assert output_path.exists()
+
+
+def test_refresh_jobs_fetches_stored_ashby_sources(tmp_path) -> None:
+    db_path = tmp_path / "jobs.sqlite"
+    output_path = tmp_path / "site" / "index.html"
+    with open_database(db_path) as connection:
+        repo = JobRepository(connection)
+        repo.upsert_source(
+            source_type="ashby",
+            slug="example-company",
+            base_url="https://jobs.ashbyhq.com/example-company",
+            discovered_from="unit-test",
+        )
+
+    def fake_ashby_fetcher(slug: str, company: str, limit: int):
+        assert slug == "example-company"
+        assert company == "example-company"
+        assert limit == 3
+        return [make_job("ashby", "1", "AI Engineer")]
+
+    result = refresh_jobs(
+        db_path=db_path,
+        output_path=output_path,
+        ashby_limit=3,
+        ashby_fetcher=fake_ashby_fetcher,
+    )
+
+    assert result.seen == 1
+    assert result.inserted == 1
+    assert result.sources[0].source == "ashby:example-company"
+    assert output_path.exists()
+    assert "AI Engineer" in output_path.read_text(encoding="utf-8")

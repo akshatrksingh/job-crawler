@@ -10,7 +10,7 @@ def test_dashboard_handler_can_be_constructed() -> None:
             output_path=Path("site/index.html"),
             days=14,
             candidate_limit=100,
-            yc_limit=10,
+            ashby_limit=10,
             cooldown_hours=6,
         )
     )

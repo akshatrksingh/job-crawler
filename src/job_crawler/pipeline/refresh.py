@@ -7,12 +7,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from job_crawler.crawlers.ashby import fetch_ashby_jobs
 from job_crawler.crawlers.base import JobPosting
 from job_crawler.crawlers.yc import fetch_yc_jobs
 from job_crawler.dashboard import write_dashboard
 from job_crawler.storage import JobRepository, open_database
 
 JobFetcher = Callable[..., list[JobPosting]]
+AshbyFetcher = Callable[..., list[JobPosting]]
 
 
 @dataclass(frozen=True)
@@ -100,6 +102,62 @@ def refresh_yc(
     )
 
 
+def refresh_jobs(
+    *,
+    db_path: Path,
+    output_path: Path,
+    days: int = 14,
+    candidate_limit: int = 10_000,
+    ashby_limit: int = 100,
+    max_sources: int = 50,
+    ashby_fetcher: AshbyFetcher = fetch_ashby_jobs,
+    cooldown_hours: int = 6,
+    force: bool = False,
+) -> RefreshResult:
+    """Fetch stored job sources, store/dedupe jobs, and regenerate the dashboard."""
+    source_results = []
+    with open_database(db_path) as connection:
+        repo = JobRepository(connection)
+        now = datetime.now(UTC)
+        last_refresh_at = _parse_datetime(repo.get_app_state(REFRESH_STATE_KEY))
+        if last_refresh_at is not None:
+            next_refresh_at = last_refresh_at + timedelta(hours=cooldown_hours)
+            if not force and now < next_refresh_at:
+                jobs = repo.list_jobs_for_digest(limit=candidate_limit)
+                write_dashboard(jobs, output_path=output_path, days=days)
+                return RefreshResult(
+                    sources=(),
+                    candidates=len(jobs),
+                    refreshed=False,
+                    last_refresh_at=last_refresh_at.isoformat(),
+                    next_refresh_at=next_refresh_at.isoformat(),
+                    cooldown_seconds_remaining=int((next_refresh_at - now).total_seconds()),
+                )
+
+        for source in repo.list_sources(source_type="ashby")[:max_sources]:
+            source_results.append(
+                _refresh_ashby_source(
+                    repo,
+                    source_id=int(source["id"]),
+                    slug=str(source["slug"]),
+                    limit=ashby_limit,
+                    fetcher=ashby_fetcher,
+                )
+            )
+        refreshed_at = datetime.now(UTC)
+        next_refresh_at = refreshed_at + timedelta(hours=cooldown_hours)
+        repo.set_app_state(REFRESH_STATE_KEY, refreshed_at.isoformat())
+        jobs = repo.list_jobs_for_digest(limit=candidate_limit)
+
+    write_dashboard(jobs, output_path=output_path, days=days)
+    return RefreshResult(
+        sources=tuple(source_results),
+        candidates=len(jobs),
+        last_refresh_at=refreshed_at.isoformat(),
+        next_refresh_at=next_refresh_at.isoformat(),
+    )
+
+
 def _refresh_source(
     repo: JobRepository,
     *,
@@ -132,6 +190,51 @@ def _refresh_source(
         )
         return SourceRefreshResult(
             source=source,
+            seen=jobs_seen,
+            inserted=jobs_inserted,
+            error=str(exc),
+        )
+
+
+def _refresh_ashby_source(
+    repo: JobRepository,
+    *,
+    source_id: int,
+    slug: str,
+    limit: int,
+    fetcher: AshbyFetcher,
+) -> SourceRefreshResult:
+    crawl_run_id = repo.start_crawl_run(source_type="ashby", source_id=source_id)
+    jobs_seen = 0
+    jobs_inserted = 0
+    try:
+        jobs = fetcher(slug=slug, company=slug, limit=limit)
+        jobs_seen = len(jobs)
+        for job in jobs:
+            jobs_inserted += int(repo.insert_job(job).inserted)
+        repo.finish_crawl_run(
+            crawl_run_id=crawl_run_id,
+            status="succeeded",
+            jobs_seen=jobs_seen,
+            jobs_inserted=jobs_inserted,
+        )
+        repo.mark_source_crawled(source_id=source_id)
+        return SourceRefreshResult(
+            source=f"ashby:{slug}",
+            seen=jobs_seen,
+            inserted=jobs_inserted,
+        )
+    except Exception as exc:
+        repo.finish_crawl_run(
+            crawl_run_id=crawl_run_id,
+            status="failed",
+            jobs_seen=jobs_seen,
+            jobs_inserted=jobs_inserted,
+            error=str(exc),
+        )
+        repo.mark_source_crawled(source_id=source_id)
+        return SourceRefreshResult(
+            source=f"ashby:{slug}",
             seen=jobs_seen,
             inserted=jobs_inserted,
             error=str(exc),
