@@ -125,6 +125,28 @@ def render_dashboard(
       color: var(--muted);
       font-size: 14px;
     }}
+    .actions {{
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: end;
+      flex-wrap: wrap;
+    }}
+    button {{
+      min-height: 40px;
+      border: 1px solid #0f766e;
+      border-radius: 6px;
+      padding: 0 12px;
+      background: #0f766e;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 650;
+      cursor: pointer;
+    }}
+    button:disabled {{
+      cursor: wait;
+      opacity: 0.72;
+    }}
     .filters {{
       display: grid;
       grid-template-columns: minmax(180px, 1fr) minmax(160px, 220px) minmax(140px, 180px);
@@ -197,7 +219,10 @@ def render_dashboard(
         <h1>Job Crawler</h1>
         <div class="meta">{len(selected)} jobs from the last {days} days</div>
       </div>
-      <div class="meta">Updated {generated_at}</div>
+      <div class="actions">
+        <button id="refresh" type="button">Refresh</button>
+        <div id="status" class="meta">Updated {generated_at}</div>
+      </div>
     </header>
 
     <section class="filters" aria-label="Filters">
@@ -234,6 +259,8 @@ def render_dashboard(
     const source = document.getElementById("source");
     const rows = Array.from(document.querySelectorAll("#jobs tr"));
     const empty = document.getElementById("empty");
+    const refresh = document.getElementById("refresh");
+    const status = document.getElementById("status");
 
     function applyFilters() {{
       const q = search.value.trim().toLowerCase();
@@ -255,6 +282,18 @@ def render_dashboard(
     search.addEventListener("input", applyFilters);
     city.addEventListener("change", applyFilters);
     source.addEventListener("change", applyFilters);
+    refresh.addEventListener("click", async () => {{
+      refresh.disabled = true;
+      status.textContent = "Refreshing...";
+      try {{
+        const response = await fetch("/api/refresh", {{ method: "POST" }});
+        if (!response.ok) throw new Error("refresh failed");
+        window.location.reload();
+      }} catch (error) {{
+        status.textContent = "Refresh requires the local server.";
+        refresh.disabled = false;
+      }}
+    }});
   </script>
 </body>
 </html>

@@ -1,0 +1,16 @@
+from pathlib import Path
+
+from job_crawler.server import DashboardServerConfig, _build_handler
+
+
+def test_dashboard_handler_can_be_constructed() -> None:
+    handler = _build_handler(
+        DashboardServerConfig(
+            db_path=Path("data/job_crawler.sqlite"),
+            output_path=Path("site/index.html"),
+            days=14,
+            candidate_limit=100,
+        )
+    )
+
+    assert handler.__name__ == "DashboardRequestHandler"
