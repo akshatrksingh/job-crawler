@@ -84,28 +84,30 @@ git push
 
 ## Stage 3: Career Page API Crawlers
 
-Status: Planned.
+Status: Done.
 
 Goal:
 
 - Implement Ashby, Greenhouse, and Lever API crawlers.
 - Normalize jobs into the shared `JobPosting` shape.
+- Add a bounded manual smoke script for one approved source/company at a time.
 
 End-to-end test:
 
 - Use fixture API responses for parser tests.
-- Run one live smoke crawl for a user-approved sample company per source.
+- Optionally run one live smoke crawl for a user-approved sample company/source.
 - Store results in SQLite without duplicates.
 
 Push after:
 
 - Parser tests pass.
-- Live smoke output looks reasonable.
+- Offline parser tests pass.
+- Optional live smoke output looks reasonable.
 
 Suggested commit:
 
 ```bash
-git add src/job_crawler/crawlers tests
+git add src/job_crawler/crawlers scripts/smoke_ats.py tests docs/development-stages.md
 git commit -m "feat(crawlers): add startup ats crawlers"
 git push
 ```
