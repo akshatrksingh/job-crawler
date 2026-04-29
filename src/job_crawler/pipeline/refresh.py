@@ -16,6 +16,7 @@ from job_crawler.crawlers.google_jobs import (
 )
 from job_crawler.crawlers.greenhouse import fetch_greenhouse_jobs
 from job_crawler.crawlers.lever import fetch_lever_jobs
+from job_crawler.crawlers.linkedin_posts import fetch_linkedin_post_leads
 from job_crawler.crawlers.yc import fetch_yc_jobs
 from job_crawler.dashboard import write_dashboard
 from job_crawler.discovery import discover_sources_from_web_search, extract_sources_from_urls
@@ -25,6 +26,7 @@ JobFetcher = Callable[..., list[JobPosting]]
 SourceFetcher = Callable[..., list[JobPosting]]
 GoogleFetcher = Callable[..., list[JobPosting]]
 GitHubBoardsFetcher = Callable[..., list[JobPosting]]
+LinkedInPostFetcher = Callable[..., list[JobPosting]]
 WebDiscoveryFetcher = Callable[..., list]
 
 
@@ -122,6 +124,7 @@ def refresh_jobs(
     ashby_limit: int = 100,
     google_jobs_limit: int = 10,
     github_jobs_limit: int = 250,
+    linkedin_posts_limit: int = 40,
     yc_limit: int = 80,
     max_google_queries: int = 20,
     web_discovery_queries: int = 20,
@@ -132,6 +135,7 @@ def refresh_jobs(
     lever_fetcher: SourceFetcher = fetch_lever_jobs,
     google_fetcher: GoogleFetcher = fetch_google_jobs,
     github_boards_fetcher: GitHubBoardsFetcher = fetch_default_github_board_jobs,
+    linkedin_posts_fetcher: LinkedInPostFetcher = fetch_linkedin_post_leads,
     yc_fetcher: JobFetcher = fetch_yc_jobs,
     web_discovery_fetcher: WebDiscoveryFetcher = discover_sources_from_web_search,
     cooldown_hours: int = 6,
@@ -197,6 +201,14 @@ def refresh_jobs(
                 repo,
                 limit=github_jobs_limit,
                 fetcher=github_boards_fetcher,
+            )
+        )
+        source_results.append(
+            _refresh_source(
+                repo,
+                source="linkedin_post_leads",
+                fetcher=linkedin_posts_fetcher,
+                limit=linkedin_posts_limit,
             )
         )
         source_results.append(

@@ -95,7 +95,7 @@ def test_render_dashboard_has_pagination_and_no_filters_or_hard_limit() -> None:
 
     html = render_dashboard(jobs, today=today, days=14)
 
-    assert html.count("<tr>") == 31
+    assert html.count("<tr>") == 32
     assert 'id="prev"' in html
     assert 'id="next"' in html
     assert 'id="search"' not in html

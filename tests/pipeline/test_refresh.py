@@ -164,6 +164,10 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         assert limit == 5
         return [make_job("yc", "1", "Founding Engineer")]
 
+    def fake_linkedin_posts_fetcher(limit: int):
+        assert limit == 6
+        return [make_job("linkedin_post_leads", "1", "Founder hiring AI Engineer")]
+
     def fake_web_discovery_fetcher(max_queries: int, results_per_query: int):
         assert max_queries == 2
         assert results_per_query == 3
@@ -183,6 +187,7 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         ashby_limit=3,
         google_jobs_limit=2,
         github_jobs_limit=4,
+        linkedin_posts_limit=6,
         yc_limit=5,
         max_google_queries=1,
         web_discovery_queries=2,
@@ -192,12 +197,13 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         lever_fetcher=fake_lever_fetcher,
         google_fetcher=fake_google_fetcher,
         github_boards_fetcher=fake_github_boards_fetcher,
+        linkedin_posts_fetcher=fake_linkedin_posts_fetcher,
         yc_fetcher=fake_yc_fetcher,
         web_discovery_fetcher=fake_web_discovery_fetcher,
     )
 
-    assert result.seen == 8
-    assert result.inserted == 8
+    assert result.seen == 9
+    assert result.inserted == 9
     assert [source.source for source in result.sources] == [
         "web_search_discovery",
         "ashby:discovered-ai",
@@ -206,6 +212,7 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         "lever:example-lever",
         "google_jobs:ai engineer:United States",
         "github_jobs:default_boards",
+        "linkedin_post_leads",
         "yc",
     ]
     assert output_path.exists()
