@@ -12,9 +12,13 @@ from typing import Any
 from job_crawler.crawlers.base import JobPosting, clean_html, coerce_datetime
 
 DEFAULT_GOOGLE_SEARCH_TERMS = (
-    "machine learning engineer new grad",
-    "ai engineer entry level",
     "software engineer new grad",
+    "software engineer entry level",
+    "software engineer 0-2 years",
+    "machine learning engineer",
+    "ai engineer",
+    "applied ai engineer",
+    "data scientist entry level",
 )
 
 DEFAULT_GOOGLE_LOCATIONS = (

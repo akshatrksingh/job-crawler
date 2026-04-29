@@ -44,7 +44,8 @@ def extract_source_from_url(url: str, *, discovered_from: str) -> DiscoveredSour
         )
 
     if hostname == "boards.greenhouse.io" and path_parts:
-        slug = path_parts[0]
+        query = parse_qs(parsed.query)
+        slug = _first_query_value(query, "for") or path_parts[0]
         return DiscoveredSource(
             source_type="greenhouse",
             slug=slug,

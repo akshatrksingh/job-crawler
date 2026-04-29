@@ -26,19 +26,21 @@ def make_job(
     )
 
 
-def test_select_dashboard_jobs_keeps_only_last_14_days() -> None:
+def test_select_dashboard_jobs_uses_first_seen_for_rolling_window() -> None:
     today = date(2026, 4, 29)
     fresh = make_job(
         "AI Engineer",
         "Fresh Co",
         "New York, NY",
-        datetime(2026, 4, 20, tzinfo=UTC),
+        datetime(2026, 1, 20, tzinfo=UTC),
+        first_seen_at=datetime(2026, 4, 20, tzinfo=UTC),
     )
     old = make_job(
         "AI Engineer",
         "Old Co",
         "New York, NY",
-        datetime(2026, 4, 1, tzinfo=UTC),
+        datetime(2026, 4, 28, tzinfo=UTC),
+        first_seen_at=datetime(2026, 4, 1, tzinfo=UTC),
     )
 
     selected = select_dashboard_jobs([fresh, old], today=today, days=14)
@@ -46,7 +48,7 @@ def test_select_dashboard_jobs_keeps_only_last_14_days() -> None:
     assert [job.company for job in selected] == ["Fresh Co"]
 
 
-def test_select_dashboard_jobs_uses_first_seen_when_posted_date_is_missing() -> None:
+def test_select_dashboard_jobs_uses_first_seen_window_when_posted_date_is_missing() -> None:
     today = date(2026, 4, 29)
     fresh = JobPosting(
         source="ashby",
@@ -75,8 +77,8 @@ def test_select_dashboard_jobs_uses_first_seen_when_posted_date_is_missing() -> 
 
     assert "Fresh Seen Co" in html
     assert "Old Seen Co" not in html
-    assert "<td>N/A</td>" in html
-    assert "<td>2026-04-28</td>" in html
+    assert "<th>Posted</th>" not in html
+    assert "<th>Seen</th>" not in html
 
 
 def test_render_dashboard_has_pagination_and_no_filters_or_hard_limit() -> None:
@@ -94,8 +96,6 @@ def test_render_dashboard_has_pagination_and_no_filters_or_hard_limit() -> None:
     html = render_dashboard(jobs, today=today, days=14)
 
     assert html.count("<tr>") == 31
-    assert "<th>Posted</th>" in html
-    assert "<th>Seen</th>" in html
     assert 'id="prev"' in html
     assert 'id="next"' in html
     assert 'id="search"' not in html

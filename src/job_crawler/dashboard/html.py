@@ -21,7 +21,6 @@ class DashboardJob:
     location: str
     source: str
     role: str
-    posted_date: date | None
     seen_date: date
     rank_score: int
 
@@ -59,7 +58,6 @@ def select_dashboard_jobs(
                 location=job.location or "Unknown",
                 source=job.source,
                 role=role_category(job.title),
-                posted_date=job.posted_at.date() if job.posted_at is not None else None,
                 seen_date=_seen_date(job),
                 rank_score=ranked.score,
             )
@@ -67,7 +65,7 @@ def select_dashboard_jobs(
     ranked = sorted(
         selected,
         key=lambda job: (
-            -_date_to_ordinal(job.posted_date or job.seen_date),
+            -_date_to_ordinal(job.seen_date),
             -job.rank_score,
             job.company.lower(),
             job.title.lower(),
@@ -252,8 +250,6 @@ def render_dashboard(
       <table>
         <thead>
           <tr>
-            <th>Posted</th>
-            <th>Seen</th>
             <th>Company</th>
             <th>Job</th>
             <th>Location</th>
@@ -369,8 +365,6 @@ def _render_row(job: DashboardJob) -> str:
     url = escape(job.url, quote=True)
     return (
         "<tr>"
-        f"<td>{job.posted_date.isoformat() if job.posted_date else 'N/A'}</td>"
-        f"<td>{job.seen_date.isoformat()}</td>"
         f"<td>{company}</td>"
         f'<td><a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a></td>'
         f"<td>{location}</td>"
@@ -425,8 +419,6 @@ def _location_bucket(location: str) -> str:
 
 
 def _window_date(job: JobPosting) -> date:
-    if job.posted_at is not None:
-        return job.posted_at.date()
     return _seen_date(job)
 
 

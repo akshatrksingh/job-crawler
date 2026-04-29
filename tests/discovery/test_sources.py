@@ -37,6 +37,18 @@ def test_extract_greenhouse_source_from_embed_url() -> None:
     assert source.slug == "examplecompany"
 
 
+def test_extract_greenhouse_source_from_boards_embed_job_app_url() -> None:
+    source = extract_source_from_url(
+        "https://boards.greenhouse.io/embed/job_app?for=singlestore&token=6237482",
+        discovered_from="site:boards.greenhouse.io software engineer new grad",
+    )
+
+    assert source is not None
+    assert source.source_type == "greenhouse"
+    assert source.slug == "singlestore"
+    assert source.base_url == "https://boards.greenhouse.io/singlestore"
+
+
 def test_extract_lever_source_from_posting_url() -> None:
     source = extract_source_from_url(
         "https://jobs.lever.co/example-company/posting-1",
