@@ -15,4 +15,4 @@ class Settings(BaseSettings):
 
     db_path: Path = Path("data/job_crawler.sqlite")
     digest_limit: int = Field(default=25, ge=1, le=100)
-    openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
+    groq_api_key: str | None = Field(default=None, validation_alias="GROQ_API_KEY")
