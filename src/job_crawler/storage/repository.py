@@ -288,6 +288,31 @@ class JobRepository:
             )
         )
 
+    def list_jobs_for_digest(self, *, limit: int = 250) -> list[JobPosting]:
+        """Return recently seen jobs for zero-cost digest ranking."""
+        rows = self.connection.execute(
+            """
+            SELECT source, source_id, company, title, location, url, description, posted_at
+            FROM jobs
+            ORDER BY first_seen_at DESC, id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [
+            JobPosting(
+                source=row["source"],
+                source_id=row["source_id"],
+                company=row["company"],
+                title=row["title"],
+                location=row["location"],
+                url=row["url"],
+                description=row["description"],
+                posted_at=datetime.fromisoformat(row["posted_at"]) if row["posted_at"] else None,
+            )
+            for row in rows
+        ]
+
     def count_rows(self, table: str) -> int:
         """Count rows in a known project table."""
         allowed_tables = {"sources", "crawl_runs", "jobs", "job_scores", "schema_migrations"}

@@ -233,7 +233,7 @@ git push
 
 ## Stage 8: Daily Digest
 
-Status: Planned.
+Status: Done.
 
 Goal:
 
@@ -247,6 +247,7 @@ End-to-end test:
 - Generate a digest.
 - Confirm strongest fixture jobs are present.
 - Confirm digest output does not include match summaries by default.
+- Confirm the SQLite repository can provide jobs for digest generation.
 
 Push after:
 
@@ -256,7 +257,7 @@ Push after:
 Suggested commit:
 
 ```bash
-git add src/job_crawler/digest tests
+git add src/job_crawler/digest src/job_crawler/storage/repository.py scripts/generate_digest.py tests/digest docs/development-stages.md
 git commit -m "feat(digest): generate daily markdown digest"
 git push
 ```

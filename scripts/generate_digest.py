@@ -1,0 +1,43 @@
+"""Generate a Markdown digest from the local SQLite database."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from datetime import date
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from job_crawler.digest import write_digest
+from job_crawler.storage import JobRepository, open_database
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db", default="data/job_crawler.sqlite")
+    parser.add_argument("--output-dir", default="digests")
+    parser.add_argument("--date", default=date.today().isoformat())
+    parser.add_argument("--limit", type=int, default=25)
+    parser.add_argument("--candidate-limit", type=int, default=250)
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    digest_date = date.fromisoformat(args.date)
+    with open_database(args.db) as connection:
+        repo = JobRepository(connection)
+        jobs = repo.list_jobs_for_digest(limit=args.candidate_limit)
+    path = write_digest(
+        jobs,
+        output_dir=Path(args.output_dir),
+        digest_date=digest_date,
+        limit=args.limit,
+    )
+    print(f"digest={path}")
+    print(f"candidates={len(jobs)}")
+
+
+if __name__ == "__main__":
+    main()
