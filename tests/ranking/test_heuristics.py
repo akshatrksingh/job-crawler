@@ -67,6 +67,9 @@ def test_role_category_handles_target_role_variations() -> None:
 def test_is_us_role_excludes_non_us_only_locations_but_keeps_us_and_generic_remote() -> None:
     assert is_us_role(make_job("AI Engineer", "Seattle, WA"))
     assert is_us_role(make_job("AI Engineer", "Seatle, Remote"))
+    assert is_us_role(make_job("AI Engineer", "Boise, ID"))
+    assert is_us_role(make_job("AI Engineer", "Bentonville, Arkansas"))
+    assert is_us_role(make_job("AI Engineer", "Tulsa"))
     assert is_us_role(make_job("AI Engineer", "New York, London"))
     assert is_us_role(make_job("AI Engineer", "Remote"))
     assert is_us_role(make_job("AI Engineer", "Remote (United States)"))
@@ -74,6 +77,10 @@ def test_is_us_role_excludes_non_us_only_locations_but_keeps_us_and_generic_remo
     assert not is_us_role(make_job("AI Engineer", "Remote - United Kingdom"))
     assert not is_us_role(make_job("AI Engineer", "Shanghai, Remote"))
     assert not is_us_role(make_job("AI Engineer", "Gdańsk, Poland, Remote"))
+    assert not is_us_role(make_job("AI Engineer", "Ottawa, Canada"))
+    assert not is_us_role(make_job("AI Engineer", "Amsterdam, Netherlands"))
+    assert not is_us_role(make_job("AI Engineer", "Lisbon, Portugal"))
+    assert not is_us_role(make_job("AI Engineer", "Tokyo, Japan"))
 
 
 def test_is_target_role_keeps_relevant_technical_roles_and_drops_noise() -> None:

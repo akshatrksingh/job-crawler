@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import IntEnum
 
@@ -220,54 +221,122 @@ US_LOCATION_KEYWORDS = (
     "remote (us",
     "remote (united states",
     "us remote",
-    "new york",
-    "nyc",
-    "san francisco",
-    "sf",
-    "bay area",
-    "seattle",
-    "seatle",
-    "boston",
-    "austin",
-    "los angeles",
-    "chicago",
-    "denver",
-    "washington",
-    "atlanta",
-    "miami",
-    "dallas",
-    "houston",
-    "phoenix",
-    "portland",
-    "minneapolis",
-    "nashville",
-    "charlotte",
-    "raleigh",
-    "durham",
-    "pittsburgh",
-    "philadelphia",
-    "san diego",
-    "san jose",
-    "palo alto",
-    "mountain view",
-    "sunnyvale",
-    "foster city",
+    "alabama",
+    "alaska",
+    "arizona",
+    "arkansas",
     "california",
-    "new jersey",
-    "ohio",
-    "texas",
-    "washington state",
-    "massachusetts",
-    "florida",
-    "illinois",
     "colorado",
+    "connecticut",
+    "delaware",
+    "district of columbia",
+    "florida",
     "georgia",
+    "hawaii",
+    "idaho",
+    "illinois",
+    "indiana",
+    "iowa",
+    "kansas",
+    "kentucky",
+    "louisiana",
+    "maine",
+    "maryland",
+    "massachusetts",
+    "michigan",
+    "minnesota",
+    "mississippi",
+    "missouri",
+    "montana",
+    "nebraska",
+    "nevada",
+    "new hampshire",
+    "new jersey",
+    "new mexico",
+    "new york",
     "north carolina",
+    "north dakota",
+    "ohio",
+    "oklahoma",
+    "oregon",
+    "rhode island",
+    "south carolina",
+    "south dakota",
+    "tennessee",
+    "texas",
+    "utah",
+    "vermont",
+    "virginia",
+    "washington state",
+    "west virginia",
+    "wisconsin",
+    "wyoming",
     "pennsylvania",
 )
 
+US_STATE_ABBREVIATIONS = (
+    "AL",
+    "AK",
+    "AZ",
+    "AR",
+    "CA",
+    "CO",
+    "CT",
+    "DC",
+    "DE",
+    "FL",
+    "GA",
+    "HI",
+    "IA",
+    "ID",
+    "IL",
+    "IN",
+    "KS",
+    "KY",
+    "LA",
+    "MA",
+    "MD",
+    "ME",
+    "MI",
+    "MN",
+    "MO",
+    "MS",
+    "MT",
+    "NC",
+    "ND",
+    "NE",
+    "NH",
+    "NJ",
+    "NM",
+    "NV",
+    "NY",
+    "OH",
+    "OK",
+    "OR",
+    "PA",
+    "RI",
+    "SC",
+    "SD",
+    "TN",
+    "TX",
+    "UT",
+    "VA",
+    "VT",
+    "WA",
+    "WI",
+    "WV",
+    "WY",
+)
+
 NON_US_LOCATION_KEYWORDS = (
+    "abu dhabi",
+    "amsterdam",
+    "australia",
     "canada",
+    "canberra",
+    "doha",
+    "dubai",
+    "france",
     "toronto",
     "montreal",
     "vancouver",
@@ -276,14 +345,34 @@ NON_US_LOCATION_KEYWORDS = (
     "london",
     "england",
     "europe",
+    "israel",
+    "japan",
+    "lithuania",
+    "netherlands",
     "singapore",
+    "south korea",
+    "seoul",
+    "stockholm",
+    "sweden",
+    "sydney",
     "india",
+    "mexico",
+    "monterrey",
+    "mexico city",
+    "poland",
+    "gdańsk",
+    "gdansk",
     "beijing",
     "shanghai",
     "shenzhen",
     "china",
     "buenos aires",
     "argentina",
+    "portugal",
+    "qatar",
+    "tokyo",
+    "united arab emirates",
+    "vilnius",
 )
 
 
@@ -401,14 +490,24 @@ def location_tier(location: str | None) -> LocationTier:
 
 
 def is_us_role(job: JobPosting) -> bool:
-    """Return true when a job is available in the US or is generic remote."""
+    """Return true unless the location is explicitly non-US-only."""
     location = (job.location or "").strip()
     if not location:
         return False
     value = f" {location.lower()} "
-    has_us_signal = any(keyword in value for keyword in US_LOCATION_KEYWORDS)
+    has_us_signal = any(keyword in value for keyword in US_LOCATION_KEYWORDS) or _has_us_state(
+        location
+    )
     if has_us_signal:
         return True
     if location.lower() == "remote":
         return True
-    return False
+    has_non_us_signal = any(keyword in value for keyword in NON_US_LOCATION_KEYWORDS)
+    return not has_non_us_signal
+
+
+def _has_us_state(location: str) -> bool:
+    return any(
+        re.search(rf"(?<![A-Za-z]){state}(?![A-Za-z])", location, flags=re.IGNORECASE)
+        for state in US_STATE_ABBREVIATIONS
+    )
