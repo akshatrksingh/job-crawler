@@ -13,4 +13,5 @@ data/*.sqlite
 data/raw/*
 data/processed/*
 digests/*.md
+site/*.html
 !.gitkeep

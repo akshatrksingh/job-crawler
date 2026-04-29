@@ -10,6 +10,7 @@ The pipeline will:
 - Deduplicate jobs so previously seen roles are not shown again.
 - Filter and rank jobs with zero-cost heuristics.
 - Produce a daily Markdown digest with a simple list of the best jobs.
+- Generate a local private dashboard page showing recent fetched jobs.
 
 No auto-apply behavior belongs in this project.
 
@@ -21,6 +22,7 @@ src/job_crawler/
   crawlers/     Source-specific crawlers
   discovery/    Dynamic company/source discovery
   digest/       Markdown daily digest generation
+  dashboard/    Local private HTML dashboard generation
   ranking/      Zero-cost job filtering and ranking
   storage/      SQLite schema, migrations, and repositories
 scripts/        Local operational scripts

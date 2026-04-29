@@ -262,7 +262,41 @@ git commit -m "feat(digest): generate daily markdown digest"
 git push
 ```
 
-## Stage 9: Daily Runner
+## Stage 9: Local Dashboard
+
+Status: Done.
+
+Goal:
+
+- Generate `site/index.html` from SQLite.
+- Show jobs from the last 14 days.
+- Keep older jobs stored but hidden from the dashboard view.
+- Provide search, location, and source filters.
+- Avoid a hard display limit.
+- Keep the dashboard local/private by default.
+
+End-to-end test:
+
+- Seed fixture jobs inside and outside the 14-day window.
+- Confirm old jobs are hidden from the generated page.
+- Confirm senior roles are excluded.
+- Confirm filters exist in the generated HTML.
+- Generate the dashboard from the local SQLite DB.
+
+Push after:
+
+- Dashboard tests pass.
+- Local `site/index.html` generates successfully.
+
+Suggested commit:
+
+```bash
+git add .gitignore README.md docs/decisions.md docs/development-stages.md site/.gitkeep src/job_crawler/dashboard scripts/generate_dashboard.py tests/dashboard
+git commit -m "feat(dashboard): generate local jobs page"
+git push
+```
+
+## Stage 10: Daily Runner
 
 Status: Planned.
 
@@ -291,7 +325,7 @@ git commit -m "feat(cli): add daily crawler runner"
 git push
 ```
 
-## Stage 10: Scheduling
+## Stage 11: Scheduling
 
 Status: Planned.
 

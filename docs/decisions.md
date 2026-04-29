@@ -98,6 +98,21 @@ Discovery requirements:
 - Avoid repeated jobs across days unless a future decision explicitly allows
   resurfacing.
 
+## Dashboard
+
+- Generate a local private HTML dashboard from SQLite.
+- The default dashboard path is `site/index.html`.
+- The dashboard should show jobs from the last 14 days, using posted date when
+  available and fetched/current date otherwise.
+- Jobs older than the rolling window should be removed from view but remain in
+  SQLite.
+- The dashboard should not impose a hard display limit.
+- The dashboard should show newest jobs first.
+- The dashboard should provide simple filters such as search, location, and
+  source.
+- Do not publish the dashboard to the internet or add hosting/auth without user
+  approval.
+
 ## Development Workflow
 
 - Work in small vertical slices that can be tested end to end.
@@ -193,3 +208,14 @@ Impact: Query generation, Google Jobs defaults, YC location parsing, and ranking
 heuristics should all include major US cities.
 Temporary or permanent: Permanent unless narrowed later.
 Follow-up: Keep digest ordering NYC/SF first, then other strong US-city matches.
+
+Decision changed: Daily output channel.
+Previous plan: Send one daily email digest.
+New plan: Generate a local private dashboard page from SQLite.
+Reason: User prefers a personal page like a job board, with all recent fetched
+jobs in one place.
+Impact: No email provider, SMTP credentials, or daily email deliverability setup
+is needed. The dashboard remains private on the local machine by default.
+Temporary or permanent: Permanent unless the user asks for email or hosted access
+later.
+Follow-up: Add scheduling only after the manual dashboard update flow works.
