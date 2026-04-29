@@ -12,17 +12,26 @@ from typing import Any
 from job_crawler.crawlers.base import JobPosting, clean_html, coerce_datetime
 
 DEFAULT_GOOGLE_SEARCH_TERMS = (
-    "software engineer",
-    "machine learning engineer",
     "ai engineer",
     "applied ai engineer",
+    "machine learning engineer",
+    "ml engineer",
+    "llm engineer",
+    "generative ai engineer",
+    "research engineer",
+    "applied scientist",
     "data scientist",
+    "data science engineer",
+    "software engineer ai",
+    "software engineer machine learning",
+    "software engineer",
+    "software development engineer",
     "founding engineer",
+    "product engineer ai",
     "backend engineer",
     "full stack engineer",
-    "entry level software engineer",
     "junior software engineer",
-    "software development engineer",
+    "entry level software engineer",
 )
 
 DEFAULT_GOOGLE_LOCATIONS = (
@@ -38,6 +47,29 @@ DEFAULT_GOOGLE_LOCATIONS = (
     "Washington, DC",
     "Raleigh, NC",
     "Remote",
+)
+
+DEFAULT_GOOGLE_JOB_QUERIES = (
+    ("ai engineer", "United States"),
+    ("applied ai engineer", "United States"),
+    ("machine learning engineer", "United States"),
+    ("ml engineer", "United States"),
+    ("llm engineer", "United States"),
+    ("generative ai engineer", "United States"),
+    ("research engineer", "United States"),
+    ("applied scientist", "United States"),
+    ("data scientist", "United States"),
+    ("data science engineer", "United States"),
+    ("software engineer ai", "United States"),
+    ("software engineer machine learning", "United States"),
+    ("software engineer", "United States"),
+    ("software development engineer", "United States"),
+    ("founding engineer", "United States"),
+    ("backend engineer", "United States"),
+    ("full stack engineer", "United States"),
+    ("ai engineer", "Seattle, WA"),
+    ("machine learning engineer", "Boston, MA"),
+    ("applied ai engineer", "Austin, TX"),
 )
 
 
@@ -98,13 +130,16 @@ def parse_jobspy_records(
 
 def build_default_google_job_queries(
     *,
+    queries: tuple[tuple[str, str], ...] = DEFAULT_GOOGLE_JOB_QUERIES,
     search_terms: tuple[str, ...] = DEFAULT_GOOGLE_SEARCH_TERMS,
     locations: tuple[str, ...] = DEFAULT_GOOGLE_LOCATIONS,
-    limit: int = 9,
+    limit: int = 20,
 ) -> list[tuple[str, str]]:
     """Build bounded search-term/location pairs for Google Jobs."""
     if limit <= 0:
         return []
+    if queries:
+        return list(queries[:limit])
     pairs: list[tuple[str, str]] = []
     for search_term in search_terms:
         for location in locations:

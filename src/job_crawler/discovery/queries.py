@@ -3,18 +3,28 @@
 from __future__ import annotations
 
 DEFAULT_ROLE_QUERIES = (
-    "machine learning engineer",
     "ai engineer",
     "applied ai engineer",
-    "agentic ai engineer",
-    "data scientist",
+    "machine learning engineer",
+    "ml engineer",
+    "llm engineer",
+    "generative ai engineer",
+    "agent engineer",
+    "ai agents engineer",
+    "research engineer",
     "applied scientist",
+    "data scientist",
+    "data science engineer",
+    "software engineer ai",
+    "software engineer machine learning",
     "software engineer",
     "software development engineer",
+    "founding engineer",
+    "product engineer ai",
     "backend engineer",
     "full stack engineer",
-    "founding engineer",
     "forward deployed software engineer",
+    "platform engineer machine learning",
 )
 
 DEFAULT_LOCATION_QUERIES = (
@@ -54,6 +64,29 @@ SOURCE_SITE_QUERIES = {
     "lever": "site:jobs.lever.co",
 }
 
+DEFAULT_WEB_DISCOVERY_ROLES = (
+    "ai engineer",
+    "applied ai engineer",
+    "machine learning engineer",
+    "ml engineer",
+    "llm engineer",
+    "generative ai engineer",
+    "research engineer",
+    "applied scientist",
+    "data scientist",
+    "software engineer ai",
+)
+
+DEFAULT_WEB_DISCOVERY_QUERIES = tuple(
+    query
+    for role in DEFAULT_WEB_DISCOVERY_ROLES
+    for query in (
+        f'site:jobs.ashbyhq.com "{role}" "United States"',
+        f'site:boards.greenhouse.io "{role}" "United States"',
+        f'site:jobs.lever.co "{role}" "United States"',
+    )
+)
+
 
 def build_discovery_queries(
     *,
@@ -64,9 +97,9 @@ def build_discovery_queries(
 ) -> list[str]:
     """Build bounded Google-style search queries for ATS discovery."""
     queries: list[str] = []
-    for source_type in source_types:
-        site_query = SOURCE_SITE_QUERIES[source_type]
-        for role in roles:
+    for role in roles:
+        for source_type in source_types:
+            site_query = SOURCE_SITE_QUERIES[source_type]
             for location in locations:
                 queries.append(f"{site_query} {role} {location}")
                 if len(queries) >= limit:

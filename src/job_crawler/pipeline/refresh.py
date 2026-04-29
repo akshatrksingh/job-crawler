@@ -18,12 +18,14 @@ from job_crawler.crawlers.greenhouse import fetch_greenhouse_jobs
 from job_crawler.crawlers.lever import fetch_lever_jobs
 from job_crawler.crawlers.yc import fetch_yc_jobs
 from job_crawler.dashboard import write_dashboard
+from job_crawler.discovery import discover_sources_from_web_search, extract_sources_from_urls
 from job_crawler.storage import JobRepository, open_database
 
 JobFetcher = Callable[..., list[JobPosting]]
 SourceFetcher = Callable[..., list[JobPosting]]
 GoogleFetcher = Callable[..., list[JobPosting]]
 GitHubBoardsFetcher = Callable[..., list[JobPosting]]
+WebDiscoveryFetcher = Callable[..., list]
 
 
 @dataclass(frozen=True)
@@ -120,13 +122,18 @@ def refresh_jobs(
     ashby_limit: int = 100,
     google_jobs_limit: int = 10,
     github_jobs_limit: int = 250,
-    max_google_queries: int = 9,
+    yc_limit: int = 80,
+    max_google_queries: int = 20,
+    web_discovery_queries: int = 20,
+    web_discovery_results_per_query: int = 8,
     max_sources: int = 50,
     ashby_fetcher: SourceFetcher = fetch_ashby_jobs,
     greenhouse_fetcher: SourceFetcher = fetch_greenhouse_jobs,
     lever_fetcher: SourceFetcher = fetch_lever_jobs,
     google_fetcher: GoogleFetcher = fetch_google_jobs,
     github_boards_fetcher: GitHubBoardsFetcher = fetch_default_github_board_jobs,
+    yc_fetcher: JobFetcher = fetch_yc_jobs,
+    web_discovery_fetcher: WebDiscoveryFetcher = discover_sources_from_web_search,
     cooldown_hours: int = 6,
     force: bool = False,
 ) -> RefreshResult:
@@ -150,6 +157,14 @@ def refresh_jobs(
                     cooldown_seconds_remaining=int((next_refresh_at - now).total_seconds()),
                 )
 
+        source_results.append(
+            _refresh_web_discovery(
+                repo,
+                max_queries=web_discovery_queries,
+                results_per_query=web_discovery_results_per_query,
+                fetcher=web_discovery_fetcher,
+            )
+        )
         fetchers = {
             "ashby": ashby_fetcher,
             "greenhouse": greenhouse_fetcher,
@@ -182,6 +197,14 @@ def refresh_jobs(
                 repo,
                 limit=github_jobs_limit,
                 fetcher=github_boards_fetcher,
+            )
+        )
+        source_results.append(
+            _refresh_source(
+                repo,
+                source="yc",
+                fetcher=yc_fetcher,
+                limit=yc_limit,
             )
         )
         refreshed_at = datetime.now(UTC)
@@ -282,6 +305,55 @@ def _refresh_stored_source(
         )
 
 
+def _refresh_web_discovery(
+    repo: JobRepository,
+    *,
+    max_queries: int,
+    results_per_query: int,
+    fetcher: WebDiscoveryFetcher,
+) -> SourceRefreshResult:
+    crawl_run_id = repo.start_crawl_run(source_type="web_search_discovery")
+    sources_seen = 0
+    sources_inserted = 0
+    try:
+        sources = fetcher(max_queries=max_queries, results_per_query=results_per_query)
+        sources_seen = len(sources)
+        before = _source_keys(repo)
+        for source in sources:
+            repo.upsert_discovered_source(source)
+        after = _source_keys(repo)
+        sources_inserted = len(after - before)
+        repo.finish_crawl_run(
+            crawl_run_id=crawl_run_id,
+            status="succeeded",
+            jobs_seen=sources_seen,
+            jobs_inserted=sources_inserted,
+        )
+        return SourceRefreshResult(
+            source="web_search_discovery",
+            seen=sources_seen,
+            inserted=sources_inserted,
+        )
+    except Exception as exc:
+        repo.finish_crawl_run(
+            crawl_run_id=crawl_run_id,
+            status="failed",
+            jobs_seen=sources_seen,
+            jobs_inserted=sources_inserted,
+            error=str(exc),
+        )
+        return SourceRefreshResult(
+            source="web_search_discovery",
+            seen=sources_seen,
+            inserted=sources_inserted,
+            error=str(exc),
+        )
+
+
+def _source_keys(repo: JobRepository) -> set[tuple[str, str]]:
+    return {(str(row["source_type"]), str(row["slug"])) for row in repo.list_sources()}
+
+
 def _fetch_source_jobs(
     source_type: str,
     *,
@@ -350,6 +422,11 @@ def _refresh_github_boards(
         jobs_seen = len(jobs)
         for job in jobs:
             jobs_inserted += int(repo.insert_job(job).inserted)
+        for source in extract_sources_from_urls(
+            [job.url for job in jobs],
+            discovered_from="github job board apply links",
+        ):
+            repo.upsert_discovered_source(source)
         repo.finish_crawl_run(
             crawl_run_id=crawl_run_id,
             status="succeeded",

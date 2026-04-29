@@ -25,6 +25,7 @@ class DashboardServerConfig:
         ashby_limit: int,
         google_jobs_limit: int,
         github_jobs_limit: int,
+        yc_limit: int,
         max_google_queries: int,
         cooldown_hours: int,
     ) -> None:
@@ -35,6 +36,7 @@ class DashboardServerConfig:
         self.ashby_limit = ashby_limit
         self.google_jobs_limit = google_jobs_limit
         self.github_jobs_limit = github_jobs_limit
+        self.yc_limit = yc_limit
         self.max_google_queries = max_google_queries
         self.cooldown_hours = cooldown_hours
 
@@ -50,7 +52,8 @@ def run_dashboard_server(
     ashby_limit: int = 100,
     google_jobs_limit: int = 10,
     github_jobs_limit: int = 250,
-    max_google_queries: int = 9,
+    yc_limit: int = 80,
+    max_google_queries: int = 20,
     cooldown_hours: int = 6,
 ) -> None:
     """Serve the local dashboard until interrupted."""
@@ -62,6 +65,7 @@ def run_dashboard_server(
         ashby_limit=ashby_limit,
         google_jobs_limit=google_jobs_limit,
         github_jobs_limit=github_jobs_limit,
+        yc_limit=yc_limit,
         max_google_queries=max_google_queries,
         cooldown_hours=cooldown_hours,
     )
@@ -87,9 +91,12 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
             self._send_bytes(html.encode("utf-8"), content_type="text/html; charset=utf-8")
 
         def do_POST(self) -> None:
-            if self.path != "/api/refresh":
-                self.send_error(HTTPStatus.NOT_FOUND)
+            if self.path == "/api/refresh":
+                self._handle_refresh()
                 return
+            self.send_error(HTTPStatus.NOT_FOUND)
+
+        def _handle_refresh(self) -> None:
             result = refresh_jobs(
                 db_path=config.db_path,
                 output_path=config.output_path,
@@ -98,8 +105,10 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
                 ashby_limit=config.ashby_limit,
                 google_jobs_limit=config.google_jobs_limit,
                 github_jobs_limit=config.github_jobs_limit,
+                yc_limit=config.yc_limit,
                 max_google_queries=config.max_google_queries,
                 cooldown_hours=config.cooldown_hours,
+                force=True,
             )
             payload = {
                 "ok": not result.errors,
@@ -118,16 +127,42 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
                 "sources": [source.__dict__ for source in result.sources],
                 "errors": result.errors,
             }
+            self._send_json(payload)
+
+        def _read_json(self) -> dict[str, object]:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            if length <= 0:
+                return {}
+            body = self.rfile.read(length).decode("utf-8")
+            try:
+                payload = json.loads(body)
+            except json.JSONDecodeError:
+                return {}
+            return payload if isinstance(payload, dict) else {}
+
+        def _send_json(
+            self,
+            payload: dict[str, object],
+            *,
+            status: HTTPStatus = HTTPStatus.OK,
+        ) -> None:
             self._send_bytes(
                 json.dumps(payload).encode("utf-8"),
                 content_type="application/json; charset=utf-8",
+                status=status,
             )
 
         def log_message(self, format: str, *args: object) -> None:
             return
 
-        def _send_bytes(self, body: bytes, *, content_type: str) -> None:
-            self.send_response(HTTPStatus.OK)
+        def _send_bytes(
+            self,
+            body: bytes,
+            *,
+            content_type: str,
+            status: HTTPStatus = HTTPStatus.OK,
+        ) -> None:
+            self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
@@ -135,7 +170,6 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
             self.wfile.write(body)
 
     return DashboardRequestHandler
-
 
 def _render_current_dashboard(config: DashboardServerConfig) -> str:
     with open_database(config.db_path) as connection:

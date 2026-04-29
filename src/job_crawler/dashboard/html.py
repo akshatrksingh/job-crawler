@@ -31,13 +31,11 @@ def select_dashboard_jobs(
     today: date | None = None,
     days: int = 14,
 ) -> list[DashboardJob]:
-    """Select non-senior non-HN jobs visible within the rolling dashboard window."""
+    """Select non-senior jobs visible within the rolling dashboard window."""
     current_date = today or datetime.now(UTC).date()
     cutoff = current_date - timedelta(days=days)
     selected: list[DashboardJob] = []
     for job in jobs:
-        if job.source == "hn":
-            continue
         if job.source == "yc" and "/jobs/role/" in job.url:
             continue
         if not is_target_role(job):
@@ -86,7 +84,6 @@ def render_dashboard(
     selected = select_dashboard_jobs(jobs, today=today, days=days)
     rows = "\n".join(_render_row(job) for job in selected)
     refresh = _refresh_metadata(last_refresh_at, cooldown_hours)
-    refresh_disabled = "disabled" if refresh["disabled"] else ""
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -241,7 +238,7 @@ def render_dashboard(
         <div class="meta">{len(selected)} jobs from the last {days} days</div>
       </div>
       <div class="actions">
-        <button id="refresh" type="button" {refresh_disabled}>Refresh</button>
+        <button id="refresh" type="button">Refresh</button>
         <div id="status" class="status">{escape(refresh["status"])}</div>
       </div>
     </header>
@@ -310,7 +307,7 @@ def render_dashboard(
     }});
     refresh.addEventListener("click", async () => {{
       refresh.disabled = true;
-      status.textContent = "Refreshing ATS sources...";
+      status.textContent = "Refreshing jobs...";
       try {{
         const response = await fetch("/api/refresh", {{ method: "POST" }});
         if (!response.ok) throw new Error("refresh failed");
@@ -438,16 +435,6 @@ def _refresh_metadata(last_refresh_at: str | None, cooldown_hours: int) -> dict[
     parsed = _parse_datetime(last_refresh_at)
     if parsed is None:
         return {"disabled": False, "status": "Last refresh unknown"}
-    next_refresh = parsed + timedelta(hours=cooldown_hours)
-    now = datetime.now(UTC)
-    if now < next_refresh:
-        return {
-            "disabled": True,
-            "status": (
-                f"Last refresh {parsed.strftime('%Y-%m-%d %H:%M UTC')} · "
-                f"next after {next_refresh.strftime('%H:%M UTC')}"
-            ),
-        }
     return {
         "disabled": False,
         "status": f"Last refresh {parsed.strftime('%Y-%m-%d %H:%M UTC')}",

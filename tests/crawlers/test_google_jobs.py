@@ -53,6 +53,7 @@ def test_parse_jobspy_records_uses_fallback_location_and_source_id() -> None:
 
 def test_build_default_google_job_queries_is_bounded() -> None:
     pairs = build_default_google_job_queries(
+        queries=(),
         search_terms=("ai engineer", "software engineer"),
         locations=("Remote", "New York"),
         limit=3,

@@ -70,6 +70,14 @@ ROLE_KEYWORDS = (
     "ml ops",
     "ai engineer",
     "artificial intelligence",
+    "applied machine learning",
+    "generative ai",
+    "genai",
+    "llm",
+    "large language model",
+    "model engineer",
+    "deep learning",
+    "nlp",
     "agent",
     "agentic",
     "agents",
@@ -93,8 +101,10 @@ ROLE_KEYWORDS = (
     "infra",
     "data engineer",
     "research engineer",
+    "research scientist",
     "data scientist",
     "data science",
+    "data science engineer",
     "applied scientist",
     "forward deployed engineer",
     "forward deployed software engineer",
@@ -106,6 +116,14 @@ TARGET_TITLE_KEYWORDS = (
     "ai engineer",
     "applied ai",
     "artificial intelligence",
+    "applied machine learning",
+    "generative ai",
+    "genai",
+    "llm",
+    "large language model",
+    "model engineer",
+    "deep learning",
+    "nlp",
     "software engineer",
     "software development engineer",
     "founding engineer",
@@ -125,7 +143,9 @@ TARGET_TITLE_KEYWORDS = (
     "cloud platform engineer",
     "data scientist",
     "data science",
+    "data science engineer",
     "applied scientist",
+    "research scientist",
     "research engineer",
     "forward deployed software engineer",
     "fdse",
@@ -134,6 +154,33 @@ TARGET_TITLE_KEYWORDS = (
     "cuda",
     "kernel engineer",
     "embedded software",
+)
+
+CONTEXT_TITLE_KEYWORDS = (
+    "engineer",
+    "developer",
+    "scientist",
+    "researcher",
+    "research",
+    "founding",
+    "member of technical staff",
+    "mts",
+)
+
+AI_CONTEXT_KEYWORDS = (
+    "machine learning",
+    "artificial intelligence",
+    "applied ai",
+    "applied machine learning",
+    "generative ai",
+    "genai",
+    "llm",
+    "large language model",
+    "deep learning",
+    "nlp",
+    "computer vision",
+    "agentic",
+    "ai agent",
 )
 
 NON_TARGET_TITLE_KEYWORDS = (
@@ -458,11 +505,16 @@ def requires_too_much_experience(job: JobPosting) -> bool:
 
 
 def is_target_role(job: JobPosting) -> bool:
-    """Return true for title-level roles aligned to the user's target search."""
+    """Return true for roles aligned to the user's target search."""
     title = job.title.lower()
     if any(keyword in title for keyword in NON_TARGET_TITLE_KEYWORDS):
         return False
-    return any(keyword in title for keyword in TARGET_TITLE_KEYWORDS)
+    if any(keyword in title for keyword in TARGET_TITLE_KEYWORDS):
+        return True
+    description = (job.description or "").lower()
+    has_technical_title = any(keyword in title for keyword in CONTEXT_TITLE_KEYWORDS)
+    has_ai_context = any(keyword in description for keyword in AI_CONTEXT_KEYWORDS)
+    return has_technical_title and has_ai_context
 
 
 def role_category(title: str) -> str:
@@ -472,7 +524,14 @@ def role_category(title: str) -> str:
         return "ML"
     if "founding" in value:
         return "Founding"
-    if "ai" in value or "artificial intelligence" in value or "agent" in value:
+    if (
+        "ai" in value
+        or "artificial intelligence" in value
+        or "agent" in value
+        or "llm" in value
+        or "generative" in value
+        or "genai" in value
+    ):
         return "AI"
     if "data scientist" in value or "data science" in value:
         return "Data Science"

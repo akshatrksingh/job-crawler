@@ -328,7 +328,7 @@ class JobRepository:
         self,
         *,
         limit: int = 250,
-        excluded_sources: tuple[str, ...] = ("hn",),
+        excluded_sources: tuple[str, ...] = (),
     ) -> list[JobPosting]:
         """Return recently seen jobs for zero-cost digest ranking."""
         where_clause = ""

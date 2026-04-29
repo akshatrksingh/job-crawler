@@ -106,6 +106,10 @@ def test_is_us_role_excludes_non_us_only_locations_but_keeps_us_and_generic_remo
 def test_is_target_role_keeps_relevant_technical_roles_and_drops_noise() -> None:
     assert is_target_role(make_job("Machine Learning Engineer", "Boston, US"))
     assert is_target_role(make_job("Applied AI Engineer", "Austin"))
+    assert is_target_role(make_job("LLM Engineer", "New York"))
+    assert is_target_role(make_job("Generative AI Engineer", "San Francisco"))
+    assert is_target_role(make_job("Research Scientist, Deep Learning", "Seattle"))
+    assert is_target_role(make_job("Data Science Engineer", "Boston"))
     assert is_target_role(make_job("Software Engineer, ML Ops", "Atlanta"))
     assert is_target_role(make_job("Software Development Engineer", "Seattle"))
     assert is_target_role(make_job("Data Scientist", "Chicago"))
@@ -122,3 +126,20 @@ def test_is_target_role_keeps_relevant_technical_roles_and_drops_noise() -> None
     assert not is_target_role(make_job("Support Engineer", "Remote"))
     assert not is_target_role(make_job("Field Engineer", "Austin"))
     assert not is_target_role(make_job("Social Media Manager", "New York"))
+
+
+def test_is_target_role_can_use_description_for_ai_context() -> None:
+    assert is_target_role(
+        make_job(
+            "Product Engineer",
+            "New York",
+            "Build applied AI agents and LLM workflows for customers.",
+        )
+    )
+    assert not is_target_role(
+        make_job(
+            "QA Analyst",
+            "Chicago",
+            "Jobright 2026 SWE new-grad board. Board freshness: 1d.",
+        )
+    )

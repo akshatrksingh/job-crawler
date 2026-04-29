@@ -105,6 +105,26 @@ def test_render_dashboard_has_pagination_and_no_filters_or_hard_limit() -> None:
     assert "Seattle, WA" in html
 
 
+def test_render_dashboard_has_no_manual_discovery_controls() -> None:
+    html = render_dashboard(
+        [
+            make_job(
+                "AI Engineer",
+                "Example Co",
+                "New York, NY",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            )
+        ],
+        today=date(2026, 4, 29),
+    )
+
+    assert 'id="discovery-urls"' not in html
+    assert 'id="discover-ats"' not in html
+    assert 'id="discover-pages"' not in html
+    assert "/api/discover-urls" not in html
+    assert "/api/discover-pages" not in html
+
+
 def test_select_dashboard_jobs_interleaves_location_buckets() -> None:
     today = date(2026, 4, 29)
     jobs = [
@@ -249,7 +269,7 @@ def test_render_dashboard_excludes_non_target_roles() -> None:
     assert "Social Co" not in html
 
 
-def test_render_dashboard_excludes_hn_jobs() -> None:
+def test_render_dashboard_includes_hn_jobs() -> None:
     today = date(2026, 4, 29)
     html = render_dashboard(
         [
@@ -271,7 +291,7 @@ def test_render_dashboard_excludes_hn_jobs() -> None:
         today=today,
     )
 
-    assert "HN Co" not in html
+    assert "HN Co" in html
     assert "YC Co" in html
 
 
@@ -303,7 +323,7 @@ def test_render_dashboard_excludes_yc_role_category_links() -> None:
     assert "Example Co" in html
 
 
-def test_render_dashboard_shows_refresh_cooldown_state() -> None:
+def test_render_dashboard_shows_last_refresh_without_disabling_refresh() -> None:
     html = render_dashboard(
         [],
         last_refresh_at=datetime.now(UTC).isoformat(),
@@ -311,8 +331,8 @@ def test_render_dashboard_shows_refresh_cooldown_state() -> None:
     )
 
     assert "Last refresh" in html
-    assert "next after" in html
-    assert 'id="refresh" type="button" disabled' in html
+    assert "next after" not in html
+    assert 'id="refresh" type="button" disabled' not in html
 
 
 def test_write_dashboard_creates_index_html(tmp_path) -> None:
