@@ -36,7 +36,8 @@ Planned crawl sources:
 - Ashby startup career pages.
 - Google Jobs through `python-jobspy`.
 - Hacker News "Who is Hiring" monthly thread through the Algolia API.
-- YC Work at a Startup board.
+- YC Work at a Startup board, using visible public pages unless a stable free API
+  is identified and approved.
 
 Discovery requirements:
 

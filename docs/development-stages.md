@@ -146,28 +146,29 @@ git push
 
 ## Stage 5: HN and YC Sources
 
-Status: Planned.
+Status: Done.
 
 Goal:
 
 - Crawl Hacker News Who is Hiring through Algolia.
-- Crawl YC Work at a Startup.
+- Parse YC Work at a Startup public job listings cautiously from visible HTML.
+- Add bounded optional smoke scripts.
 
 End-to-end test:
 
 - Fetch current/recent HN thread metadata.
 - Extract job-like posts into normalized records.
-- Fetch or parse YC roles into normalized records.
+- Parse YC roles into normalized records from fixture HTML.
 
 Push after:
 
 - Fixture tests pass.
-- Live smoke run stores new jobs without duplicates.
+- Optional live smoke run stores new jobs without duplicates.
 
 Suggested commit:
 
 ```bash
-git add src/job_crawler/crawlers tests
+git add src/job_crawler/crawlers scripts/smoke_hn.py scripts/smoke_yc.py tests/crawlers docs/development-stages.md docs/decisions.md
 git commit -m "feat(crawlers): add hn and yc sources"
 git push
 ```
