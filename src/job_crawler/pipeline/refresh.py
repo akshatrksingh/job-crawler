@@ -9,12 +9,14 @@ from pathlib import Path
 
 from job_crawler.crawlers.ashby import fetch_ashby_jobs
 from job_crawler.crawlers.base import JobPosting
+from job_crawler.crawlers.greenhouse import fetch_greenhouse_jobs
+from job_crawler.crawlers.lever import fetch_lever_jobs
 from job_crawler.crawlers.yc import fetch_yc_jobs
 from job_crawler.dashboard import write_dashboard
 from job_crawler.storage import JobRepository, open_database
 
 JobFetcher = Callable[..., list[JobPosting]]
-AshbyFetcher = Callable[..., list[JobPosting]]
+SourceFetcher = Callable[..., list[JobPosting]]
 
 
 @dataclass(frozen=True)
@@ -110,7 +112,9 @@ def refresh_jobs(
     candidate_limit: int = 10_000,
     ashby_limit: int = 100,
     max_sources: int = 50,
-    ashby_fetcher: AshbyFetcher = fetch_ashby_jobs,
+    ashby_fetcher: SourceFetcher = fetch_ashby_jobs,
+    greenhouse_fetcher: SourceFetcher = fetch_greenhouse_jobs,
+    lever_fetcher: SourceFetcher = fetch_lever_jobs,
     cooldown_hours: int = 6,
     force: bool = False,
 ) -> RefreshResult:
@@ -134,16 +138,23 @@ def refresh_jobs(
                     cooldown_seconds_remaining=int((next_refresh_at - now).total_seconds()),
                 )
 
-        for source in repo.list_sources(source_type="ashby")[:max_sources]:
-            source_results.append(
-                _refresh_ashby_source(
-                    repo,
-                    source_id=int(source["id"]),
-                    slug=str(source["slug"]),
-                    limit=ashby_limit,
-                    fetcher=ashby_fetcher,
+        fetchers = {
+            "ashby": ashby_fetcher,
+            "greenhouse": greenhouse_fetcher,
+            "lever": lever_fetcher,
+        }
+        for source_type, fetcher in fetchers.items():
+            for source in repo.list_sources(source_type=source_type)[:max_sources]:
+                source_results.append(
+                    _refresh_stored_source(
+                        repo,
+                        source_type=source_type,
+                        source_id=int(source["id"]),
+                        slug=str(source["slug"]),
+                        limit=ashby_limit,
+                        fetcher=fetcher,
+                    )
                 )
-            )
         refreshed_at = datetime.now(UTC)
         next_refresh_at = refreshed_at + timedelta(hours=cooldown_hours)
         repo.set_app_state(REFRESH_STATE_KEY, refreshed_at.isoformat())
@@ -196,19 +207,20 @@ def _refresh_source(
         )
 
 
-def _refresh_ashby_source(
+def _refresh_stored_source(
     repo: JobRepository,
     *,
+    source_type: str,
     source_id: int,
     slug: str,
     limit: int,
-    fetcher: AshbyFetcher,
+    fetcher: SourceFetcher,
 ) -> SourceRefreshResult:
-    crawl_run_id = repo.start_crawl_run(source_type="ashby", source_id=source_id)
+    crawl_run_id = repo.start_crawl_run(source_type=source_type, source_id=source_id)
     jobs_seen = 0
     jobs_inserted = 0
     try:
-        jobs = fetcher(slug=slug, company=slug, limit=limit)
+        jobs = _fetch_source_jobs(source_type, fetcher=fetcher, slug=slug, limit=limit)
         jobs_seen = len(jobs)
         for job in jobs:
             jobs_inserted += int(repo.insert_job(job).inserted)
@@ -220,7 +232,7 @@ def _refresh_ashby_source(
         )
         repo.mark_source_crawled(source_id=source_id)
         return SourceRefreshResult(
-            source=f"ashby:{slug}",
+            source=f"{source_type}:{slug}",
             seen=jobs_seen,
             inserted=jobs_inserted,
         )
@@ -234,11 +246,25 @@ def _refresh_ashby_source(
         )
         repo.mark_source_crawled(source_id=source_id)
         return SourceRefreshResult(
-            source=f"ashby:{slug}",
+            source=f"{source_type}:{slug}",
             seen=jobs_seen,
             inserted=jobs_inserted,
             error=str(exc),
         )
+
+
+def _fetch_source_jobs(
+    source_type: str,
+    *,
+    fetcher: SourceFetcher,
+    slug: str,
+    limit: int,
+) -> list[JobPosting]:
+    if source_type == "greenhouse":
+        return fetcher(board_token=slug, company=slug, limit=limit)
+    if source_type == "lever":
+        return fetcher(site=slug, company=slug, limit=limit)
+    return fetcher(slug=slug, company=slug, limit=limit)
 
 
 def _parse_datetime(value: str | None) -> datetime | None:

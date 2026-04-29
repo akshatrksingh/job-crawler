@@ -21,7 +21,8 @@ class DashboardJob:
     location: str
     source: str
     role: str
-    visible_date: date
+    posted_date: date | None
+    seen_date: date
     rank_score: int
 
 
@@ -47,7 +48,7 @@ def select_dashboard_jobs(
         ranked = rank_job(job)
         if ranked.excluded:
             continue
-        visible_date = _visible_date(job)
+        visible_date = _window_date(job)
         if visible_date < cutoff:
             continue
         selected.append(
@@ -58,14 +59,15 @@ def select_dashboard_jobs(
                 location=job.location or "Unknown",
                 source=job.source,
                 role=role_category(job.title),
-                visible_date=visible_date,
+                posted_date=job.posted_at.date() if job.posted_at is not None else None,
+                seen_date=_seen_date(job),
                 rank_score=ranked.score,
             )
         )
     ranked = sorted(
         selected,
         key=lambda job: (
-            -_date_to_ordinal(job.visible_date),
+            -_date_to_ordinal(job.posted_date or job.seen_date),
             -job.rank_score,
             job.company.lower(),
             job.title.lower(),
@@ -250,7 +252,8 @@ def render_dashboard(
       <table>
         <thead>
           <tr>
-            <th>Date</th>
+            <th>Posted</th>
+            <th>Seen</th>
             <th>Company</th>
             <th>Job</th>
             <th>Location</th>
@@ -311,7 +314,7 @@ def render_dashboard(
     }});
     refresh.addEventListener("click", async () => {{
       refresh.disabled = true;
-      status.textContent = "Refreshing Ashby sources...";
+      status.textContent = "Refreshing ATS sources...";
       try {{
         const response = await fetch("/api/refresh", {{ method: "POST" }});
         if (!response.ok) throw new Error("refresh failed");
@@ -366,7 +369,8 @@ def _render_row(job: DashboardJob) -> str:
     url = escape(job.url, quote=True)
     return (
         "<tr>"
-        f"<td>{job.visible_date.isoformat()}</td>"
+        f"<td>{job.posted_date.isoformat() if job.posted_date else 'N/A'}</td>"
+        f"<td>{job.seen_date.isoformat()}</td>"
         f"<td>{company}</td>"
         f'<td><a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a></td>'
         f"<td>{location}</td>"
@@ -420,9 +424,15 @@ def _location_bucket(location: str) -> str:
     return "other-us"
 
 
-def _visible_date(job: JobPosting) -> date:
+def _window_date(job: JobPosting) -> date:
     if job.posted_at is not None:
         return job.posted_at.date()
+    return _seen_date(job)
+
+
+def _seen_date(job: JobPosting) -> date:
+    if job.first_seen_at is not None:
+        return job.first_seen_at.date()
     return datetime.now(UTC).date()
 
 

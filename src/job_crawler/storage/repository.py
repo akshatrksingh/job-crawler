@@ -304,7 +304,16 @@ class JobRepository:
         params.append(limit)
         rows = self.connection.execute(
             f"""
-            SELECT source, source_id, company, title, location, url, description, posted_at
+            SELECT
+                source,
+                source_id,
+                company,
+                title,
+                location,
+                url,
+                description,
+                posted_at,
+                first_seen_at
             FROM jobs
             {where_clause}
             ORDER BY first_seen_at DESC, id DESC
@@ -322,6 +331,9 @@ class JobRepository:
                 url=row["url"],
                 description=row["description"],
                 posted_at=datetime.fromisoformat(row["posted_at"]) if row["posted_at"] else None,
+                first_seen_at=datetime.fromisoformat(row["first_seen_at"])
+                if row["first_seen_at"]
+                else None,
             )
             for row in rows
         ]

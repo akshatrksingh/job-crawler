@@ -89,7 +89,7 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
             payload = {
                 "ok": not result.errors,
                 "message": (
-                    "Fetched stored Ashby sources and refreshed dashboard."
+                    "Fetched stored ATS sources and refreshed dashboard."
                     if result.refreshed
                     else "Refresh cooldown active."
                 ),

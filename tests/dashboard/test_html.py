@@ -11,6 +11,7 @@ def make_job(
     location: str,
     posted_at: datetime,
     source: str = "fixture",
+    first_seen_at: datetime | None = None,
 ) -> JobPosting:
     return JobPosting(
         source=source,
@@ -21,6 +22,7 @@ def make_job(
         url=f"https://example.com/{company}/{title}".replace(" ", "-"),
         description="Entry level AI engineering role.",
         posted_at=posted_at,
+        first_seen_at=first_seen_at,
     )
 
 
@@ -44,6 +46,39 @@ def test_select_dashboard_jobs_keeps_only_last_14_days() -> None:
     assert [job.company for job in selected] == ["Fresh Co"]
 
 
+def test_select_dashboard_jobs_uses_first_seen_when_posted_date_is_missing() -> None:
+    today = date(2026, 4, 29)
+    fresh = JobPosting(
+        source="ashby",
+        source_id="fresh",
+        company="Fresh Seen Co",
+        title="AI Engineer",
+        location="Boston, US",
+        url="https://example.com/fresh",
+        description="Entry level AI role.",
+        posted_at=None,
+        first_seen_at=datetime(2026, 4, 28, tzinfo=UTC),
+    )
+    old = JobPosting(
+        source="ashby",
+        source_id="old",
+        company="Old Seen Co",
+        title="AI Engineer",
+        location="Boston, US",
+        url="https://example.com/old",
+        description="Entry level AI role.",
+        posted_at=None,
+        first_seen_at=datetime(2026, 4, 1, tzinfo=UTC),
+    )
+
+    html = render_dashboard([fresh, old], today=today, days=14)
+
+    assert "Fresh Seen Co" in html
+    assert "Old Seen Co" not in html
+    assert "<td>N/A</td>" in html
+    assert "<td>2026-04-28</td>" in html
+
+
 def test_render_dashboard_has_pagination_and_no_filters_or_hard_limit() -> None:
     today = date(2026, 4, 29)
     jobs = [
@@ -59,6 +94,8 @@ def test_render_dashboard_has_pagination_and_no_filters_or_hard_limit() -> None:
     html = render_dashboard(jobs, today=today, days=14)
 
     assert html.count("<tr>") == 31
+    assert "<th>Posted</th>" in html
+    assert "<th>Seen</th>" in html
     assert 'id="prev"' in html
     assert 'id="next"' in html
     assert 'id="search"' not in html
