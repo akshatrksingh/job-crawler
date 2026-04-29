@@ -182,6 +182,9 @@ SOURCE_FILTER_OPTIONS = (
     "lever",
     "yc",
     "google_jobs",
+    "github_jobs",
+    "jobright_swe_new_grad_2026",
+    "simplify_new_grad_positions",
 )
 
 EARLY_CAREER_KEYWORDS = (
@@ -210,6 +213,18 @@ SENIOR_KEYWORDS = (
     "director",
     "architect",
     "head of",
+)
+
+TOO_MUCH_EXPERIENCE_PATTERNS = (
+    re.compile(r"\b(?:[4-9]|1[0-9])\+?\s*(?:years?|yrs?)\b"),
+    re.compile(
+        r"\b(?:at least|minimum(?: of)?|requires?)\s+"
+        r"(?:[4-9]|1[0-9])\+?\s*(?:years?|yrs?)\b"
+    ),
+    re.compile(
+        r"\b(?:[4-9]|1[0-9])\+?\s*(?:years?|yrs?)\s+of\s+"
+        r"(?:professional\s+)?experience\b"
+    ),
 )
 
 US_LOCATION_KEYWORDS = (
@@ -394,7 +409,7 @@ def rank_job(job: JobPosting) -> RankedJob:
     combined = f"{title} {description}"
     tier = location_tier(job.location)
 
-    excluded = is_senior_role(job)
+    excluded = is_senior_role(job) or requires_too_much_experience(job)
     score = 0
     if any(keyword in combined for keyword in ROLE_KEYWORDS):
         score += 40
@@ -413,7 +428,12 @@ def rank_job(job: JobPosting) -> RankedJob:
     if excluded:
         score -= 100
 
-    reason = "excluded senior/staff role" if excluded else f"location tier {tier.name.lower()}"
+    if is_senior_role(job):
+        reason = "excluded senior/staff role"
+    elif requires_too_much_experience(job):
+        reason = "excluded experience requirement above 3 years"
+    else:
+        reason = f"location tier {tier.name.lower()}"
     return RankedJob(job=job, score=score, location_tier=tier, excluded=excluded, reason=reason)
 
 
@@ -421,6 +441,12 @@ def is_senior_role(job: JobPosting) -> bool:
     """Return true for seniority levels the user wants to avoid."""
     title = job.title.lower()
     return any(keyword in title for keyword in SENIOR_KEYWORDS)
+
+
+def requires_too_much_experience(job: JobPosting) -> bool:
+    """Return true when text explicitly asks for more than 3 years."""
+    combined = f"{job.title} {job.description or ''}".lower()
+    return any(pattern.search(combined) for pattern in TOO_MUCH_EXPERIENCE_PATTERNS)
 
 
 def is_target_role(job: JobPosting) -> bool:

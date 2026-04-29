@@ -38,11 +38,9 @@ def canonicalize_url(url: str) -> str:
 def build_job_fingerprint(job: JobPosting) -> str:
     """Build a stable dedupe fingerprint for a posting."""
     canonical_parts = [
-        _normalize_text(job.source),
         _normalize_text(job.company),
         _normalize_text(job.title),
         _normalize_text(job.location),
-        canonicalize_url(job.url),
     ]
     payload = "\n".join(canonical_parts)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -185,6 +183,23 @@ class JobRepository:
     def insert_job(self, job: JobPosting, *, raw: dict[str, Any] | None = None) -> JobInsertResult:
         """Insert a job if it is new, otherwise refresh its last-seen timestamp."""
         fingerprint = build_job_fingerprint(job)
+        existing_id = self._find_semantic_duplicate(job)
+        if existing_id is not None:
+            self.connection.execute(
+                """
+                UPDATE jobs
+                SET last_seen_at = datetime('now'),
+                    url = CASE
+                        WHEN source = 'github_jobs' THEN ?
+                        ELSE url
+                    END
+                WHERE id = ?
+                """,
+                (canonicalize_url(job.url), existing_id),
+            )
+            self.connection.commit()
+            return JobInsertResult(job_id=existing_id, inserted=False)
+
         raw_json = json.dumps(raw, sort_keys=True) if raw is not None else None
         cursor = self.connection.execute(
             """
@@ -224,7 +239,7 @@ class JobRepository:
                 WHERE fingerprint = ? OR (source = ? AND source_id = ?)
                 """,
                 (fingerprint, job.source, job.source_id),
-            )
+        )
         row = self.connection.execute(
             """
             SELECT id
@@ -237,6 +252,27 @@ class JobRepository:
         ).fetchone()
         self.connection.commit()
         return JobInsertResult(job_id=int(row["id"]), inserted=inserted)
+
+    def _find_semantic_duplicate(self, job: JobPosting) -> int | None:
+        row = self.connection.execute(
+            """
+            SELECT id
+            FROM jobs
+            WHERE lower(company) = ?
+              AND lower(title) = ?
+              AND lower(COALESCE(location, '')) = ?
+            ORDER BY
+                CASE WHEN source = 'github_jobs' THEN 1 ELSE 0 END,
+                id
+            LIMIT 1
+            """,
+            (
+                _normalize_text(job.company),
+                _normalize_text(job.title),
+                _normalize_text(job.location),
+            ),
+        ).fetchone()
+        return int(row["id"]) if row else None
 
     def insert_score(
         self,

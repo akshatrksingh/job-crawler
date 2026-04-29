@@ -9,6 +9,7 @@ from pathlib import Path
 
 from job_crawler.crawlers.ashby import fetch_ashby_jobs
 from job_crawler.crawlers.base import JobPosting
+from job_crawler.crawlers.github_boards import fetch_default_github_board_jobs
 from job_crawler.crawlers.google_jobs import (
     build_default_google_job_queries,
     fetch_google_jobs,
@@ -22,6 +23,7 @@ from job_crawler.storage import JobRepository, open_database
 JobFetcher = Callable[..., list[JobPosting]]
 SourceFetcher = Callable[..., list[JobPosting]]
 GoogleFetcher = Callable[..., list[JobPosting]]
+GitHubBoardsFetcher = Callable[..., list[JobPosting]]
 
 
 @dataclass(frozen=True)
@@ -117,12 +119,14 @@ def refresh_jobs(
     candidate_limit: int = 10_000,
     ashby_limit: int = 100,
     google_jobs_limit: int = 10,
+    github_jobs_limit: int = 250,
     max_google_queries: int = 9,
     max_sources: int = 50,
     ashby_fetcher: SourceFetcher = fetch_ashby_jobs,
     greenhouse_fetcher: SourceFetcher = fetch_greenhouse_jobs,
     lever_fetcher: SourceFetcher = fetch_lever_jobs,
     google_fetcher: GoogleFetcher = fetch_google_jobs,
+    github_boards_fetcher: GitHubBoardsFetcher = fetch_default_github_board_jobs,
     cooldown_hours: int = 6,
     force: bool = False,
 ) -> RefreshResult:
@@ -173,6 +177,13 @@ def refresh_jobs(
                     fetcher=google_fetcher,
                 )
             )
+        source_results.append(
+            _refresh_github_boards(
+                repo,
+                limit=github_jobs_limit,
+                fetcher=github_boards_fetcher,
+            )
+        )
         refreshed_at = datetime.now(UTC)
         next_refresh_at = refreshed_at + timedelta(hours=cooldown_hours)
         repo.set_app_state(REFRESH_STATE_KEY, refreshed_at.isoformat())
@@ -319,6 +330,47 @@ def _refresh_google_query(
         )
         return SourceRefreshResult(
             source=source_label,
+            seen=jobs_seen,
+            inserted=jobs_inserted,
+            error=str(exc),
+        )
+
+
+def _refresh_github_boards(
+    repo: JobRepository,
+    *,
+    limit: int,
+    fetcher: GitHubBoardsFetcher,
+) -> SourceRefreshResult:
+    crawl_run_id = repo.start_crawl_run(source_type="github_jobs")
+    jobs_seen = 0
+    jobs_inserted = 0
+    try:
+        jobs = fetcher(limit=limit)
+        jobs_seen = len(jobs)
+        for job in jobs:
+            jobs_inserted += int(repo.insert_job(job).inserted)
+        repo.finish_crawl_run(
+            crawl_run_id=crawl_run_id,
+            status="succeeded",
+            jobs_seen=jobs_seen,
+            jobs_inserted=jobs_inserted,
+        )
+        return SourceRefreshResult(
+            source="github_jobs:default_boards",
+            seen=jobs_seen,
+            inserted=jobs_inserted,
+        )
+    except Exception as exc:
+        repo.finish_crawl_run(
+            crawl_run_id=crawl_run_id,
+            status="failed",
+            jobs_seen=jobs_seen,
+            jobs_inserted=jobs_inserted,
+            error=str(exc),
+        )
+        return SourceRefreshResult(
+            source="github_jobs:default_boards",
             seen=jobs_seen,
             inserted=jobs_inserted,
             error=str(exc),

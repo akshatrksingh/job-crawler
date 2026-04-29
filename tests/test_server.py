@@ -12,6 +12,7 @@ def test_dashboard_handler_can_be_constructed() -> None:
             candidate_limit=100,
             ashby_limit=10,
             google_jobs_limit=5,
+            github_jobs_limit=25,
             max_google_queries=2,
             cooldown_hours=6,
         )

@@ -50,6 +50,55 @@ def test_insert_job_allows_distinct_titles_for_same_company() -> None:
         assert repo.count_rows("jobs") == 2
 
 
+def test_insert_job_dedupes_same_role_across_sources() -> None:
+    with open_database(":memory:") as connection:
+        repo = JobRepository(connection)
+
+        ats = repo.insert_job(
+            make_job(
+                source="ashby",
+                source_id="ats-1",
+                url="https://jobs.ashbyhq.com/example-company/ats-1",
+            )
+        )
+        board = repo.insert_job(
+            make_job(
+                source="github_jobs",
+                source_id="board-1",
+                url="https://jobright.ai/jobs/info/board-1",
+            )
+        )
+
+        assert ats.inserted is True
+        assert board.inserted is False
+        assert ats.job_id == board.job_id
+        assert repo.count_rows("jobs") == 1
+
+
+def test_insert_job_replaces_github_board_url_when_direct_source_arrives() -> None:
+    with open_database(":memory:") as connection:
+        repo = JobRepository(connection)
+
+        board = repo.insert_job(
+            make_job(
+                source="github_jobs",
+                source_id="board-1",
+                url="https://jobright.ai/jobs/info/board-1",
+            )
+        )
+        direct = repo.insert_job(
+            make_job(
+                source="ashby",
+                source_id="ats-1",
+                url="https://jobs.ashbyhq.com/example-company/ats-1?utm_source=board",
+            )
+        )
+        row = connection.execute("SELECT url FROM jobs WHERE id = ?", (board.job_id,)).fetchone()
+
+        assert direct.inserted is False
+        assert row["url"] == "https://jobs.ashbyhq.com/example-company/ats-1"
+
+
 def test_unscored_jobs_excludes_existing_model_prompt_scores() -> None:
     with open_database(":memory:") as connection:
         repo = JobRepository(connection)

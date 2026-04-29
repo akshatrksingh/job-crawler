@@ -22,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--candidate-limit", type=int, default=10_000)
     serve.add_argument("--ashby-limit", type=int, default=100)
     serve.add_argument("--google-jobs-limit", type=int, default=10)
+    serve.add_argument("--github-jobs-limit", type=int, default=250)
     serve.add_argument("--max-google-queries", type=int, default=9)
     serve.add_argument("--cooldown-hours", type=int, default=6)
 
@@ -41,6 +42,7 @@ def main(argv: list[str] | None = None) -> None:
             candidate_limit=args.candidate_limit,
             ashby_limit=args.ashby_limit,
             google_jobs_limit=args.google_jobs_limit,
+            github_jobs_limit=args.github_jobs_limit,
             max_google_queries=args.max_google_queries,
             cooldown_hours=args.cooldown_hours,
         )

@@ -63,3 +63,7 @@ def test_build_default_google_job_queries_is_bounded() -> None:
         ("ai engineer", "New York"),
         ("software engineer", "Remote"),
     ]
+
+
+def test_build_default_google_job_queries_allows_zero_queries() -> None:
+    assert build_default_google_job_queries(limit=0) == []

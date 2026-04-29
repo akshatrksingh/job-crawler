@@ -130,30 +130,37 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         return [make_job("lever", "1", "Machine Learning Engineer")]
 
     def fake_google_fetcher(search_term: str, location: str, results_wanted: int):
-        assert search_term == "software engineer new grad"
-        assert location == "New York, NY"
+        assert search_term == "software engineer"
+        assert location == "United States"
         assert results_wanted == 2
         return [make_job("google_jobs", "1", "AI Engineer")]
+
+    def fake_github_boards_fetcher(limit: int):
+        assert limit == 4
+        return [make_job("github_jobs", "1", "Software Engineer I")]
 
     result = refresh_jobs(
         db_path=db_path,
         output_path=output_path,
         ashby_limit=3,
         google_jobs_limit=2,
+        github_jobs_limit=4,
         max_google_queries=1,
         ashby_fetcher=fake_ashby_fetcher,
         greenhouse_fetcher=fake_greenhouse_fetcher,
         lever_fetcher=fake_lever_fetcher,
         google_fetcher=fake_google_fetcher,
+        github_boards_fetcher=fake_github_boards_fetcher,
     )
 
-    assert result.seen == 4
-    assert result.inserted == 4
+    assert result.seen == 5
+    assert result.inserted == 5
     assert [source.source for source in result.sources] == [
         "ashby:example-company",
         "greenhouse:example-gh",
         "lever:example-lever",
-        "google_jobs:software engineer new grad:New York, NY",
+        "google_jobs:software engineer:United States",
+        "github_jobs:default_boards",
     ]
     assert output_path.exists()
     assert "AI Engineer" in output_path.read_text(encoding="utf-8")

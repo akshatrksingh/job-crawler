@@ -24,6 +24,7 @@ class DashboardServerConfig:
         candidate_limit: int,
         ashby_limit: int,
         google_jobs_limit: int,
+        github_jobs_limit: int,
         max_google_queries: int,
         cooldown_hours: int,
     ) -> None:
@@ -33,6 +34,7 @@ class DashboardServerConfig:
         self.candidate_limit = candidate_limit
         self.ashby_limit = ashby_limit
         self.google_jobs_limit = google_jobs_limit
+        self.github_jobs_limit = github_jobs_limit
         self.max_google_queries = max_google_queries
         self.cooldown_hours = cooldown_hours
 
@@ -47,6 +49,7 @@ def run_dashboard_server(
     candidate_limit: int = 10_000,
     ashby_limit: int = 100,
     google_jobs_limit: int = 10,
+    github_jobs_limit: int = 250,
     max_google_queries: int = 9,
     cooldown_hours: int = 6,
 ) -> None:
@@ -58,6 +61,7 @@ def run_dashboard_server(
         candidate_limit=candidate_limit,
         ashby_limit=ashby_limit,
         google_jobs_limit=google_jobs_limit,
+        github_jobs_limit=github_jobs_limit,
         max_google_queries=max_google_queries,
         cooldown_hours=cooldown_hours,
     )
@@ -93,6 +97,7 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
                 candidate_limit=config.candidate_limit,
                 ashby_limit=config.ashby_limit,
                 google_jobs_limit=config.google_jobs_limit,
+                github_jobs_limit=config.github_jobs_limit,
                 max_google_queries=config.max_google_queries,
                 cooldown_hours=config.cooldown_hours,
             )

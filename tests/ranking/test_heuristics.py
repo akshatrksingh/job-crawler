@@ -6,6 +6,7 @@ from job_crawler.ranking import (
     is_us_role,
     location_tier,
     rank_job,
+    requires_too_much_experience,
     role_category,
 )
 
@@ -51,6 +52,24 @@ def test_rank_job_excludes_senior_staff_and_lead_roles() -> None:
     assert rank_job(senior).excluded is True
     assert rank_job(staff).excluded is True
     assert rank_job(junior).excluded is False
+
+
+def test_rank_job_excludes_roles_requiring_more_than_three_years() -> None:
+    too_much = make_job(
+        "Software Engineer",
+        "Austin, TX",
+        "Requires 5+ years of professional experience building production systems.",
+    )
+    okay = make_job(
+        "Machine Learning Engineer",
+        "Seattle, WA",
+        "Looking for 0-3 years of experience or equivalent internship work.",
+    )
+
+    assert requires_too_much_experience(too_much)
+    assert not requires_too_much_experience(okay)
+    assert rank_job(too_much).excluded is True
+    assert rank_job(okay).excluded is False
 
 
 def test_role_category_handles_target_role_variations() -> None:

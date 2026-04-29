@@ -12,21 +12,28 @@ from typing import Any
 from job_crawler.crawlers.base import JobPosting, clean_html, coerce_datetime
 
 DEFAULT_GOOGLE_SEARCH_TERMS = (
-    "software engineer new grad",
-    "software engineer entry level",
-    "software engineer 0-2 years",
+    "software engineer",
     "machine learning engineer",
     "ai engineer",
     "applied ai engineer",
-    "data scientist entry level",
+    "data scientist",
+    "entry level software engineer",
+    "junior software engineer",
+    "software development engineer",
 )
 
 DEFAULT_GOOGLE_LOCATIONS = (
-    "New York, NY",
-    "San Francisco, CA",
+    "United States",
     "Seattle, WA",
     "Boston, MA",
     "Austin, TX",
+    "Chicago, IL",
+    "Denver, CO",
+    "Atlanta, GA",
+    "Dallas, TX",
+    "Los Angeles, CA",
+    "Washington, DC",
+    "Raleigh, NC",
     "Remote",
 )
 
@@ -93,6 +100,8 @@ def build_default_google_job_queries(
     limit: int = 9,
 ) -> list[tuple[str, str]]:
     """Build bounded search-term/location pairs for Google Jobs."""
+    if limit <= 0:
+        return []
     pairs: list[tuple[str, str]] = []
     for search_term in search_terms:
         for location in locations:
