@@ -8,21 +8,21 @@ grows.
 
 - The project is a personal job discovery pipeline.
 - The project must not auto-apply to jobs.
-- The project should find jobs, score them against the user's resume, and create
-  a daily Markdown digest.
+- The project should find jobs, filter/rank them with zero-cost heuristics, and
+  create a daily Markdown digest.
 - The daily digest should be simple and scannable: company, job title, link, and
   location are enough.
-- The digest should prioritize the best jobs from each run rather than rely on a
-  hard score cutoff. A threshold can be used as a starting heuristic, but it
-  should adapt if the market is sparse or unusually strong.
+- The digest should prioritize the best jobs from each run using deterministic
+  role, seniority, location, and recency heuristics.
 - The target roles are ML engineer, AI engineer, agentic AI engineer, applied AI
   roles, SWE roles, SDE roles, and closely related engineering roles.
 - The target seniority is new grad, entry level, junior, or roles expecting up to
   roughly 2-3 years of experience. This is a soft boundary, but senior, staff,
   principal, lead, manager, and architect roles should usually be avoided.
-- The target locations prioritize San Francisco, New York City, and remote, but
-  the crawler should also consider other large US cities and nearby metro areas
-  when the role fit is strong.
+- The target locations prioritize New York City and San Francisco first, then
+  other major US cities and nearby metro areas such as Seattle, Boston, Austin,
+  Los Angeles, Chicago, Denver, Washington DC, and Atlanta. Remote US roles are
+  also in scope.
 - Any company type is acceptable. Startups, mid-size companies, larger companies,
   labs, and non-FAANG companies are all in scope.
 - Indeed is intentionally out of scope.
@@ -58,12 +58,12 @@ Discovery requirements:
   the same endpoints unnecessarily.
 - Prefer incremental crawling and cached state over full recrawls.
 - Keep live-network smoke tests small and explicit.
-- Do not spend OpenAI credits on jobs that were already scored.
-- Batch or cap scoring work per run so a bad crawl cannot create an unexpected
-  bill.
+- Do not add paid APIs or LLM calls unless the user explicitly approves them.
+- The default pipeline should cost $0 to run aside from normal local compute and
+  internet usage.
 - Keep Google Jobs live searches manual and tiny by default because `python-jobspy`
   may scrape upstream pages and can hit rate limits if overused.
-- Any increase to crawl frequency, query breadth, scoring volume, or scheduled
+- Any increase to crawl frequency, query breadth, paid API usage, or scheduled
   execution needs user approval.
 
 ## Storage
@@ -71,34 +71,30 @@ Discovery requirements:
 - SQLite is the source of truth.
 - Store raw crawl metadata where useful for debugging, but normalize job records
   into stable tables.
-- Deduplicate jobs before scoring or including them in a digest.
+- Deduplicate jobs before ranking or including them in a digest.
 - The dedupe logic should prevent the same job from appearing again after it has
   already been seen.
 - Prefer stable source identifiers when available; otherwise derive a normalized
   fingerprint from source, company, title, location, and canonical URL.
 
-## Scoring
+## Ranking
 
-- Score new jobs against the user's resume with GPT-4o-mini unless the user
-  approves a model change.
-- Use a structured prompt and structured output so scores can be parsed and
-  stored reliably.
-- Score on a 1-10 scale.
-- Store both the numeric score and a short reason.
-- Treat scoring as ranking/filtering assistance, not truth. The final digest is a
-  recommendation list, not an application decision.
-- For LLM behavior changes, add small eval fixtures before trusting the new
-  prompt broadly.
+- Do not implement resume/GPT scoring in the current plan.
+- Use zero-cost deterministic heuristics for filtering and ranking.
+- Prioritize role match, early-career fit, location priority, source recency, and
+  dedupe state.
+- Penalize or exclude senior, staff, principal, lead, manager, director, and
+  architect roles by default.
+- Ranking is used to order the digest, not to make final application decisions.
 
 ## Digest
 
 - Generate one clean Markdown file per day.
-- Prioritize the strongest jobs from the run. Prefer an adaptive threshold or
-  top-N strategy over a rigid score cutoff.
+- Prioritize the strongest jobs from the run with zero-cost ranking heuristics.
 - Each digest item should include only company, job title, direct job URL, and
   location by default.
-- Scores and internal match reasons should stay in SQLite unless the user asks to
-  show them.
+- Internal rank metadata should stay out of the default digest unless the user
+  asks to show it.
 - Avoid repeated jobs across days unless a future decision explicitly allows
   resurfacing.
 
@@ -122,8 +118,8 @@ Discovery requirements:
 - Network-facing tests should be explicit and not required for every quick local
   test run.
 - SQLite changes should include tests for schema creation and dedupe behavior.
-- Scoring changes should include deterministic tests around prompt construction,
-  response parsing, and threshold filtering.
+- Ranking changes should include deterministic tests around location priority,
+  seniority exclusion, and role keyword handling.
 
 ## Diff Log
 
@@ -175,3 +171,25 @@ needs one more approved integration decision.
 Temporary or permanent: Temporary sequencing decision.
 Follow-up: Ask user before adding SerpAPI, Google Custom Search, browser-based
 search, or another live search provider.
+
+Decision changed: Resume/GPT scoring.
+Previous plan: Score jobs against the user's resume with GPT-4o-mini.
+New plan: Drop resume/GPT scoring from the current pipeline and use zero-cost
+heuristic filtering/ranking.
+Reason: User said resume scoring is not needed and wants costs to remain $0.
+Impact: No OpenAI API key or credits are needed for the planned pipeline. Digest
+ordering will be deterministic and simpler.
+Temporary or permanent: Permanent unless the user re-adds resume scoring later.
+Follow-up: Remove scoring-oriented stage planning and avoid paid model calls.
+
+Decision changed: Location targeting.
+Previous plan: Prioritize SF, NYC, and remote with vague support for other US
+cities.
+New plan: Prioritize NYC and SF first, then consider other major US cities and
+nearby metro areas such as Seattle, Boston, Austin, Los Angeles, Chicago, Denver,
+Washington DC, and Atlanta. Remote US remains in scope.
+Reason: User clarified that the search should not be only SF/NYC.
+Impact: Query generation, Google Jobs defaults, YC location parsing, and ranking
+heuristics should all include major US cities.
+Temporary or permanent: Permanent unless narrowed later.
+Follow-up: Keep digest ordering NYC/SF first, then other strong US-city matches.

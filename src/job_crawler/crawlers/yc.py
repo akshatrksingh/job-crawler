@@ -75,6 +75,18 @@ def _guess_company(context: str, title: str) -> str:
 
 
 def _guess_location(context: str) -> str | None:
-    markers = ("Remote", "San Francisco", "New York", "Seattle", "Austin", "Boston")
+    markers = (
+        "Remote",
+        "New York",
+        "San Francisco",
+        "Seattle",
+        "Boston",
+        "Austin",
+        "Los Angeles",
+        "Chicago",
+        "Denver",
+        "Washington",
+        "Atlanta",
+    )
     found = [marker for marker in markers if marker.lower() in context.lower()]
     return " / ".join(found) if found else None

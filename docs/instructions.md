@@ -32,7 +32,7 @@ These are strict operating rules for this project.
 
 ## Coding Rules
 
-- Keep the pipeline modular: discovery, crawling, storage, scoring, and digest
+- Keep the pipeline modular: discovery, crawling, storage, ranking, and digest
   generation should remain separable.
 - Prefer typed Python and small functions with clear boundaries.
 - Keep network fetching separate from parsing and normalization.
@@ -47,7 +47,7 @@ These are strict operating rules for this project.
 - Do not add Indeed support unless the user explicitly re-adds it.
 - Protect against rate limits and accidental spend. Use conservative limits,
   persisted crawl state, idempotent retries, and explicit user approval before
-  increasing crawl volume, schedule frequency, or scoring volume.
+  increasing crawl volume, schedule frequency, or paid API usage.
 
 ## Testing Rules
 
@@ -58,17 +58,16 @@ These are strict operating rules for this project.
 - Run the smallest meaningful test first; broaden tests when touching shared
   storage, dedupe, or CLI behavior.
 
-## LLM Scoring Rules
+## Ranking Rules
 
-- Use GPT-4o-mini for job scoring unless the user approves a change.
-- Keep prompts explicit and structured.
-- Request parseable structured output.
-- Store score, reason, model name, and scoring timestamp.
-- Do not rescore jobs that already have a current score unless the user approves
-  a rescoring run.
-- Cap live scoring runs by default so unexpected crawl volume cannot burn
-  credits.
-- Add prompt/eval fixtures before changing scoring behavior materially.
+- Do not add LLM/resume scoring unless the user explicitly re-adds it.
+- Keep default ranking cost-free and deterministic.
+- Prioritize NYC and SF first, then other major US cities such as Seattle,
+  Boston, Austin, Los Angeles, Chicago, Denver, Washington DC, and Atlanta.
+- Include Remote US roles.
+- Exclude or strongly penalize senior, staff, principal, lead, manager, director,
+  and architect roles.
+- Add deterministic tests before changing ranking behavior materially.
 
 ## Manual Command Template
 

@@ -59,14 +59,14 @@ Status: Done.
 Goal:
 
 - Add SQLite schema creation.
-- Add job, source, crawl run, and score tables.
+- Add job, source, crawl run, and score/rank-support tables.
 - Add idempotent insert/dedupe behavior.
 
 End-to-end test:
 
 - Insert fixture jobs from two fake sources.
 - Confirm duplicate inserts do not create duplicate job rows.
-- Confirm new jobs can be selected for scoring.
+- Confirm new jobs can be selected for downstream ranking/digest generation.
 - Confirm crawl state can record timestamps for rate-limit-friendly reruns.
 
 Push after:
@@ -203,31 +203,31 @@ git commit -m "feat(crawlers): add google jobs adapter"
 git push
 ```
 
-## Stage 7: Resume Scoring
+## Stage 7: Zero-Cost Ranking
 
-Status: Planned.
+Status: Done.
 
 Goal:
 
-- Load resume from `JOB_CRAWLER_RESUME_PATH`.
-- Score unscored jobs with GPT-4o-mini.
-- Store score, reason, model, and timestamp.
+- Rank jobs without paid APIs or LLM calls.
+- Prioritize NYC/SF first, then other major US cities and Remote US.
+- Exclude or strongly penalize senior/staff/lead-style roles.
 
 End-to-end test:
 
-- Use a fake scorer in tests.
-- Run one user-approved live scoring smoke test with a small job batch.
+- Use fixture jobs covering primary cities, other major cities, Remote US, and
+  senior-role exclusion.
 
 Push after:
 
-- Prompt construction and response parsing tests pass.
-- Live smoke scoring succeeds.
+- Ranking heuristic tests pass.
+- Full test suite passes.
 
 Suggested commit:
 
 ```bash
-git add src/job_crawler/scoring tests .env.example
-git commit -m "feat(scoring): score jobs against resume"
+git add README.md .env.example pyproject.toml docs src/job_crawler/ranking tests/ranking
+git commit -m "feat(ranking): add zero-cost job ranking"
 git push
 ```
 
@@ -239,11 +239,11 @@ Goal:
 
 - Generate `digests/YYYY-MM-DD.md`.
 - Include a simple list of company, job title, link, and location.
-- Use adaptive selection/top-N rather than a fixed score-only cutoff.
+- Use zero-cost ranking/top-N rather than a fixed score-only cutoff.
 
 End-to-end test:
 
-- Seed scored fixture jobs.
+- Seed ranked fixture jobs.
 - Generate a digest.
 - Confirm strongest fixture jobs are present.
 - Confirm digest output does not include match summaries by default.
@@ -267,7 +267,7 @@ Status: Planned.
 
 Goal:
 
-- Add a single command that runs discovery, crawling, scoring, and digest
+- Add a single command that runs discovery, crawling, ranking, and digest
   generation.
 - Add clear docs for local scheduling.
 

@@ -1,6 +1,6 @@
 # job-crawler
 
-Personal job crawling pipeline for finding ML engineer, AI engineer, and agentic AI roles in SF, NYC, and remote.
+Personal job crawling pipeline for finding ML engineer, AI engineer, agentic AI, SWE, and SDE roles across major US tech hubs and remote.
 
 The pipeline will:
 
@@ -8,8 +8,8 @@ The pipeline will:
 - Crawl Greenhouse, Lever, Ashby, Google Jobs, Hacker News Who is Hiring, and YC Work at a Startup.
 - Store jobs and crawl metadata in SQLite.
 - Deduplicate jobs so previously seen roles are not shown again.
-- Score new jobs against a resume with GPT-4o-mini.
-- Produce a daily Markdown digest with jobs scoring 7 or above.
+- Filter and rank jobs with zero-cost heuristics.
+- Produce a daily Markdown digest with a simple list of the best jobs.
 
 No auto-apply behavior belongs in this project.
 
@@ -21,7 +21,7 @@ src/job_crawler/
   crawlers/     Source-specific crawlers
   discovery/    Dynamic company/source discovery
   digest/       Markdown daily digest generation
-  scoring/      Resume/job scoring
+  ranking/      Zero-cost job filtering and ranking
   storage/      SQLite schema, migrations, and repositories
 scripts/        Local operational scripts
 tests/          Unit and integration tests

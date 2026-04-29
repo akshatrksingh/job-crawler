@@ -11,12 +11,17 @@ DEFAULT_ROLE_QUERIES = (
 )
 
 DEFAULT_LOCATION_QUERIES = (
-    "San Francisco",
     "New York",
-    "remote",
+    "San Francisco",
     "Seattle",
     "Boston",
     "Austin",
+    "remote",
+    "Los Angeles",
+    "Chicago",
+    "Denver",
+    "Washington DC",
+    "Atlanta",
 )
 
 SOURCE_SITE_QUERIES = {

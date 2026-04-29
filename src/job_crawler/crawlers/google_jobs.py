@@ -18,8 +18,11 @@ DEFAULT_GOOGLE_SEARCH_TERMS = (
 )
 
 DEFAULT_GOOGLE_LOCATIONS = (
-    "San Francisco, CA",
     "New York, NY",
+    "San Francisco, CA",
+    "Seattle, WA",
+    "Boston, MA",
+    "Austin, TX",
     "Remote",
 )
 
