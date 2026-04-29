@@ -10,9 +10,10 @@ def make_job(
     company: str,
     location: str,
     posted_at: datetime,
+    source: str = "fixture",
 ) -> JobPosting:
     return JobPosting(
-        source="fixture",
+        source=source,
         source_id=f"{company}-{title}",
         company=company,
         title=title,
@@ -59,8 +60,11 @@ def test_render_dashboard_includes_filters_and_no_hard_limit() -> None:
 
     assert html.count("<tr data-search=") == 30
     assert 'id="search"' in html
-    assert 'id="city"' in html
+    assert 'id="location"' in html
+    assert 'id="role"' in html
     assert 'id="source"' in html
+    assert 'id="prev"' in html
+    assert 'id="next"' in html
     assert "Seattle, WA" in html
 
 
@@ -85,6 +89,72 @@ def test_render_dashboard_excludes_senior_roles() -> None:
 
     assert "Senior Co" not in html
     assert "Junior Co" in html
+
+
+def test_render_dashboard_excludes_hn_jobs() -> None:
+    today = date(2026, 4, 29)
+    html = render_dashboard(
+        [
+            make_job(
+                "AI Engineer",
+                "HN Co",
+                "New York, NY",
+                datetime(2026, 4, 28, tzinfo=UTC),
+                source="hn",
+            ),
+            make_job(
+                "AI Engineer",
+                "YC Co",
+                "New York, NY",
+                datetime(2026, 4, 28, tzinfo=UTC),
+                source="yc",
+            ),
+        ],
+        today=today,
+    )
+
+    assert "HN Co" not in html
+    assert "YC Co" in html
+
+
+def test_render_dashboard_excludes_yc_role_category_links() -> None:
+    today = date(2026, 4, 29)
+    html = render_dashboard(
+        [
+            JobPosting(
+                source="yc",
+                source_id="designer",
+                company="YC Company",
+                title="Design & UI/UX",
+                location="Unknown",
+                url="https://www.ycombinator.com/jobs/role/designer",
+                description=None,
+                posted_at=datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+            make_job(
+                "AI Engineer",
+                "Example Co",
+                "New York, NY",
+                datetime(2026, 4, 28, tzinfo=UTC),
+            ),
+        ],
+        today=today,
+    )
+
+    assert "Design &amp; UI/UX" not in html
+    assert "Example Co" in html
+
+
+def test_render_dashboard_shows_refresh_cooldown_state() -> None:
+    html = render_dashboard(
+        [],
+        last_refresh_at=datetime.now(UTC).isoformat(),
+        cooldown_hours=6,
+    )
+
+    assert "Last refresh" in html
+    assert "next after" in html
+    assert 'id="refresh" type="button" disabled' in html
 
 
 def test_write_dashboard_creates_index_html(tmp_path) -> None:

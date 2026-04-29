@@ -7,7 +7,8 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from job_crawler.dashboard import render_dashboard, write_dashboard
+from job_crawler.dashboard import render_dashboard
+from job_crawler.pipeline import refresh_yc
 from job_crawler.storage import JobRepository, open_database
 
 
@@ -21,11 +22,15 @@ class DashboardServerConfig:
         output_path: Path,
         days: int,
         candidate_limit: int,
+        yc_limit: int,
+        cooldown_hours: int,
     ) -> None:
         self.db_path = db_path
         self.output_path = output_path
         self.days = days
         self.candidate_limit = candidate_limit
+        self.yc_limit = yc_limit
+        self.cooldown_hours = cooldown_hours
 
 
 def run_dashboard_server(
@@ -36,6 +41,8 @@ def run_dashboard_server(
     output_path: Path = Path("site/index.html"),
     days: int = 14,
     candidate_limit: int = 10_000,
+    yc_limit: int = 80,
+    cooldown_hours: int = 6,
 ) -> None:
     """Serve the local dashboard until interrupted."""
     config = DashboardServerConfig(
@@ -43,6 +50,8 @@ def run_dashboard_server(
         output_path=output_path,
         days=days,
         candidate_limit=candidate_limit,
+        yc_limit=yc_limit,
+        cooldown_hours=cooldown_hours,
     )
     handler = _build_handler(config)
     server = ThreadingHTTPServer((host, port), handler)
@@ -69,16 +78,30 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
             if self.path != "/api/refresh":
                 self.send_error(HTTPStatus.NOT_FOUND)
                 return
-            jobs = _load_jobs(config)
-            write_dashboard(
-                jobs,
+            result = refresh_yc(
+                db_path=config.db_path,
                 output_path=config.output_path,
                 days=config.days,
+                candidate_limit=config.candidate_limit,
+                yc_limit=config.yc_limit,
+                cooldown_hours=config.cooldown_hours,
             )
             payload = {
-                "ok": True,
-                "message": "Dashboard refreshed from SQLite.",
-                "candidates": len(jobs),
+                "ok": not result.errors,
+                "message": (
+                    "Fetched YC and refreshed dashboard."
+                    if result.refreshed
+                    else "Refresh cooldown active."
+                ),
+                "refreshed": result.refreshed,
+                "seen": result.seen,
+                "inserted": result.inserted,
+                "candidates": result.candidates,
+                "last_refresh_at": result.last_refresh_at,
+                "next_refresh_at": result.next_refresh_at,
+                "cooldown_seconds_remaining": result.cooldown_seconds_remaining,
+                "sources": [source.__dict__ for source in result.sources],
+                "errors": result.errors,
             }
             self._send_bytes(
                 json.dumps(payload).encode("utf-8"),
@@ -100,10 +123,11 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
 
 
 def _render_current_dashboard(config: DashboardServerConfig) -> str:
-    return render_dashboard(_load_jobs(config), days=config.days)
-
-
-def _load_jobs(config: DashboardServerConfig):
     with open_database(config.db_path) as connection:
         repo = JobRepository(connection)
-        return repo.list_jobs_for_digest(limit=config.candidate_limit)
+        return render_dashboard(
+            repo.list_jobs_for_digest(limit=config.candidate_limit),
+            days=config.days,
+            last_refresh_at=repo.get_app_state("last_refresh_at"),
+            cooldown_hours=config.cooldown_hours,
+        )

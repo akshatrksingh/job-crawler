@@ -5,7 +5,7 @@ Personal job crawling pipeline for finding ML engineer, AI engineer, agentic AI,
 The pipeline will:
 
 - Discover companies dynamically from search results instead of using a hardcoded company list.
-- Crawl Greenhouse, Lever, Ashby, Google Jobs, Hacker News Who is Hiring, and YC Work at a Startup.
+- Crawl Greenhouse, Lever, Ashby, Google Jobs, and YC Work at a Startup.
 - Store jobs and crawl metadata in SQLite.
 - Deduplicate jobs so previously seen roles are not shown again.
 - Filter and rank jobs with zero-cost heuristics.

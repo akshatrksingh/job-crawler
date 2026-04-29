@@ -26,7 +26,13 @@ def main() -> None:
     with open_database(args.db) as connection:
         repo = JobRepository(connection)
         jobs = repo.list_jobs_for_digest(limit=args.candidate_limit)
-    path = write_dashboard(jobs, output_path=Path(args.output), days=args.days)
+        last_refresh_at = repo.get_app_state("last_refresh_at")
+    path = write_dashboard(
+        jobs,
+        output_path=Path(args.output),
+        days=args.days,
+        last_refresh_at=last_refresh_at,
+    )
     print(f"dashboard={path}")
     print(f"candidates={len(jobs)}")
 

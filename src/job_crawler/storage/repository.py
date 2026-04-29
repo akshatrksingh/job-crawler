@@ -288,16 +288,29 @@ class JobRepository:
             )
         )
 
-    def list_jobs_for_digest(self, *, limit: int = 250) -> list[JobPosting]:
+    def list_jobs_for_digest(
+        self,
+        *,
+        limit: int = 250,
+        excluded_sources: tuple[str, ...] = ("hn",),
+    ) -> list[JobPosting]:
         """Return recently seen jobs for zero-cost digest ranking."""
+        where_clause = ""
+        params: list[object] = []
+        if excluded_sources:
+            placeholders = ", ".join("?" for _ in excluded_sources)
+            where_clause = f"WHERE source NOT IN ({placeholders})"
+            params.extend(excluded_sources)
+        params.append(limit)
         rows = self.connection.execute(
-            """
+            f"""
             SELECT source, source_id, company, title, location, url, description, posted_at
             FROM jobs
+            {where_clause}
             ORDER BY first_seen_at DESC, id DESC
             LIMIT ?
             """,
-            (limit,),
+            params,
         ).fetchall()
         return [
             JobPosting(
@@ -312,6 +325,32 @@ class JobRepository:
             )
             for row in rows
         ]
+
+    def get_app_state(self, key: str) -> str | None:
+        """Read a persisted app state value."""
+        row = self.connection.execute(
+            """
+            SELECT value
+            FROM app_state
+            WHERE key = ?
+            """,
+            (key,),
+        ).fetchone()
+        return str(row["value"]) if row else None
+
+    def set_app_state(self, key: str, value: str) -> None:
+        """Persist an app state value."""
+        self.connection.execute(
+            """
+            INSERT INTO app_state (key, value, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = datetime('now')
+            """,
+            (key, value),
+        )
+        self.connection.commit()
 
     def count_rows(self, table: str) -> int:
         """Count rows in a known project table."""

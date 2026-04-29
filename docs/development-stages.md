@@ -144,20 +144,17 @@ git commit -m "feat(discovery): add dynamic ats source discovery"
 git push
 ```
 
-## Stage 5: HN and YC Sources
+## Stage 5: YC Source
 
-Status: Done.
+Status: Done. HN was later removed from active scope.
 
 Goal:
 
-- Crawl Hacker News Who is Hiring through Algolia.
 - Parse YC Work at a Startup public job listings cautiously from visible HTML.
 - Add bounded optional smoke scripts.
 
 End-to-end test:
 
-- Fetch current/recent HN thread metadata.
-- Extract job-like posts into normalized records.
 - Parse YC roles into normalized records from fixture HTML.
 
 Push after:
@@ -168,8 +165,8 @@ Push after:
 Suggested commit:
 
 ```bash
-git add src/job_crawler/crawlers scripts/smoke_hn.py scripts/smoke_yc.py tests/crawlers docs/development-stages.md docs/decisions.md
-git commit -m "feat(crawlers): add hn and yc sources"
+git add src/job_crawler/crawlers scripts/smoke_yc.py tests/crawlers docs/development-stages.md docs/decisions.md
+git commit -m "feat(crawlers): add yc source"
 git push
 ```
 

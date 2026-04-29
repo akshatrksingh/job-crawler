@@ -14,6 +14,7 @@ def test_parse_yc_jobs_html_extracts_visible_job_links() -> None:
           Full-time Engineering San Francisco, CA, US / Remote (US)
         </div>
         <a href="/jobs">Jobs</a>
+        <a href="/jobs/role/designer">Design & UI/UX</a>
       </body>
     </html>
     """

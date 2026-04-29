@@ -20,6 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--output", type=Path, default=Path("site/index.html"))
     serve.add_argument("--days", type=int, default=14)
     serve.add_argument("--candidate-limit", type=int, default=10_000)
+    serve.add_argument("--yc-limit", type=int, default=80)
+    serve.add_argument("--cooldown-hours", type=int, default=6)
 
     return parser
 
@@ -35,4 +37,6 @@ def main(argv: list[str] | None = None) -> None:
             output_path=args.output,
             days=args.days,
             candidate_limit=args.candidate_limit,
+            yc_limit=args.yc_limit,
+            cooldown_hours=args.cooldown_hours,
         )

@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 SCHEMA_SQL = """
@@ -78,7 +78,14 @@ CREATE TABLE IF NOT EXISTS job_scores (
 
 CREATE INDEX IF NOT EXISTS idx_job_scores_score ON job_scores(score DESC);
 
+CREATE TABLE IF NOT EXISTS app_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (1);
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (2);
 """
 
 

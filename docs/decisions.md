@@ -35,7 +35,6 @@ Planned crawl sources:
 - Lever startup career pages.
 - Ashby startup career pages.
 - Google Jobs through `python-jobspy`.
-- Hacker News "Who is Hiring" monthly thread through the Algolia API.
 - YC Work at a Startup board, using visible public pages unless a stable free API
   is identified and approved.
 
@@ -219,3 +218,21 @@ is needed. The dashboard remains private on the local machine by default.
 Temporary or permanent: Permanent unless the user asks for email or hosted access
 later.
 Follow-up: Add scheduling only after the manual dashboard update flow works.
+
+Decision changed: Hacker News source.
+Previous plan: Include Hacker News Who is Hiring through Algolia.
+New plan: Remove HN from the active crawler pipeline and dashboard.
+Reason: User asked to remove HN.
+Impact: HN jobs already present in local SQLite are not deleted, but they are
+hidden from the dashboard and HN is no longer fetched.
+Temporary or permanent: Permanent unless the user asks to re-add HN later.
+Follow-up: Keep refresh focused on YC and later ATS sources.
+
+Decision changed: Refresh cadence.
+Previous plan: Refresh could be clicked repeatedly while the server is running.
+New plan: Persist refresh time and disable refresh for 6 hours after a successful
+refresh.
+Reason: User wants to avoid repeated fetching, rate limits, and abuse.
+Impact: The dashboard shows last refresh time and next allowed refresh time.
+Temporary or permanent: Permanent default; cooldown length can be changed later.
+Follow-up: Apply the same cooldown/backoff pattern when ATS refresh is added.

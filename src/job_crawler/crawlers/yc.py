@@ -39,6 +39,8 @@ def parse_yc_jobs_html(html: str, *, limit: int = 50) -> list[JobPosting]:
         href = str(anchor["href"])
         if "/jobs/" not in href:
             continue
+        if href.startswith("/jobs/role/") or href == "/jobs":
+            continue
         title = anchor.get_text(" ", strip=True)
         if not title or "job" in title.lower() and len(title.split()) <= 3:
             continue

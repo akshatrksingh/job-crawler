@@ -20,6 +20,7 @@ class DashboardJob:
     url: str
     location: str
     source: str
+    role: str
     visible_date: date
     rank_score: int
 
@@ -30,11 +31,15 @@ def select_dashboard_jobs(
     today: date | None = None,
     days: int = 14,
 ) -> list[DashboardJob]:
-    """Select non-senior jobs visible within the rolling dashboard window."""
+    """Select non-senior non-HN jobs visible within the rolling dashboard window."""
     current_date = today or datetime.now(UTC).date()
     cutoff = current_date - timedelta(days=days)
     selected: list[DashboardJob] = []
     for job in jobs:
+        if job.source == "hn":
+            continue
+        if job.source == "yc" and "/jobs/role/" in job.url:
+            continue
         ranked = rank_job(job)
         if ranked.excluded:
             continue
@@ -48,6 +53,7 @@ def select_dashboard_jobs(
                 url=job.url,
                 location=job.location or "Unknown",
                 source=job.source,
+                role=_role_category(job.title),
                 visible_date=visible_date,
                 rank_score=ranked.score,
             )
@@ -68,19 +74,20 @@ def render_dashboard(
     *,
     today: date | None = None,
     days: int = 14,
+    last_refresh_at: str | None = None,
+    cooldown_hours: int = 6,
 ) -> str:
     """Render a standalone local HTML dashboard."""
     selected = select_dashboard_jobs(jobs, today=today, days=days)
     rows = "\n".join(_render_row(job) for job in selected)
-    cities = sorted({job.location for job in selected})
+    locations = sorted({job.location for job in selected})
+    roles = sorted({job.role for job in selected})
     sources = sorted({job.source for job in selected})
-    city_options = "\n".join(
-        f'<option value="{escape(city)}">{escape(city)}</option>' for city in cities
-    )
-    source_options = "\n".join(
-        f'<option value="{escape(source)}">{escape(source)}</option>' for source in sources
-    )
-    generated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    location_options = _options(locations)
+    role_options = _options(roles)
+    source_options = _options(sources)
+    refresh = _refresh_metadata(last_refresh_at, cooldown_hours)
+    refresh_disabled = "disabled" if refresh["disabled"] else ""
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -90,39 +97,46 @@ def render_dashboard(
   <style>
     :root {{
       color-scheme: light;
-      --bg: #f7f8fa;
-      --panel: #ffffff;
-      --text: #172026;
-      --muted: #5f6b76;
-      --line: #d9dee5;
-      --accent: #0f766e;
+      --bg: #f5efe7;
+      --panel: #fffbf4;
+      --panel-2: #f9f1e6;
+      --text: #2b211a;
+      --muted: #7c6a5d;
+      --line: #dfd0bf;
+      --accent: #9f4f2f;
+      --accent-2: #365f5a;
+      --shadow: 0 16px 40px rgba(62, 39, 24, 0.08);
+    }}
+    * {{
+      box-sizing: border-box;
     }}
     body {{
       margin: 0;
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: ui-serif, Georgia, "Times New Roman", serif;
     }}
     main {{
       max-width: 1180px;
       margin: 0 auto;
-      padding: 28px 20px 48px;
+      padding: 30px 20px 48px;
     }}
     header {{
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
       align-items: end;
       margin-bottom: 18px;
     }}
     h1 {{
-      margin: 0 0 4px;
-      font-size: 28px;
+      margin: 0 0 6px;
+      font-size: 31px;
       font-weight: 700;
       letter-spacing: 0;
     }}
-    .meta {{
+    .meta, .status {{
       color: var(--muted);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 14px;
     }}
     .actions {{
@@ -131,48 +145,77 @@ def render_dashboard(
       align-items: center;
       justify-content: end;
       flex-wrap: wrap;
+      text-align: right;
     }}
     button {{
       min-height: 40px;
-      border: 1px solid #0f766e;
-      border-radius: 6px;
-      padding: 0 12px;
-      background: #0f766e;
-      color: #ffffff;
+      border: 1px solid var(--accent);
+      border-radius: 7px;
+      padding: 0 14px;
+      background: var(--accent);
+      color: #fffaf3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 14px;
       font-weight: 650;
       cursor: pointer;
     }}
+    button.secondary {{
+      border-color: var(--line);
+      background: var(--panel);
+      color: var(--text);
+    }}
     button:disabled {{
-      cursor: wait;
-      opacity: 0.72;
+      cursor: not-allowed;
+      opacity: 0.58;
     }}
     .filters {{
       display: grid;
-      grid-template-columns: minmax(180px, 1fr) minmax(160px, 220px) minmax(140px, 180px);
-      gap: 10px;
+      grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(160px, 210px));
+      gap: 12px;
       margin: 18px 0;
     }}
+    .filter-group {{
+      display: grid;
+      gap: 6px;
+    }}
+    label {{
+      color: var(--muted);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+      font-weight: 650;
+    }}
     input, select {{
-      min-height: 40px;
+      width: 100%;
+      min-height: 42px;
       border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 0 10px;
+      border-radius: 7px;
+      padding: 8px 10px;
       background: var(--panel);
       color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 14px;
+    }}
+    select[multiple] {{
+      min-height: 104px;
+    }}
+    .table-wrap {{
+      overflow: auto;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
     }}
     table {{
       width: 100%;
       border-collapse: collapse;
-      background: var(--panel);
-      border: 1px solid var(--line);
+      min-width: 780px;
     }}
     th, td {{
-      padding: 12px 10px;
+      padding: 13px 12px;
       border-bottom: 1px solid var(--line);
       text-align: left;
       vertical-align: top;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 14px;
     }}
     th {{
@@ -180,34 +223,46 @@ def render_dashboard(
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0;
-      background: #fbfcfd;
+      background: var(--panel-2);
     }}
     a {{
-      color: var(--accent);
-      font-weight: 600;
+      color: var(--accent-2);
+      font-weight: 680;
       text-decoration: none;
     }}
     a:hover {{
       text-decoration: underline;
     }}
+    .pager {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+    }}
     .empty {{
       display: none;
+      margin-top: 12px;
       padding: 18px;
       background: var(--panel);
       border: 1px solid var(--line);
+      border-radius: 8px;
       color: var(--muted);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }}
-    @media (max-width: 760px) {{
+    @media (max-width: 860px) {{
       header, .filters {{
         display: block;
       }}
-      input, select {{
-        width: 100%;
-        box-sizing: border-box;
-        margin-bottom: 10px;
+      .filter-group {{
+        margin-bottom: 12px;
       }}
-      th:nth-child(5), td:nth-child(5) {{
-        display: none;
+      .actions {{
+        justify-content: start;
+        text-align: left;
       }}
     }}
   </style>
@@ -220,80 +275,143 @@ def render_dashboard(
         <div class="meta">{len(selected)} jobs from the last {days} days</div>
       </div>
       <div class="actions">
-        <button id="refresh" type="button">Refresh</button>
-        <div id="status" class="meta">Updated {generated_at}</div>
+        <button id="refresh" type="button" {refresh_disabled}>Refresh</button>
+        <div id="status" class="status">{escape(refresh["status"])}</div>
       </div>
     </header>
 
     <section class="filters" aria-label="Filters">
-      <input id="search" type="search" placeholder="Search company or title">
-      <select id="city">
-        <option value="">All locations</option>
-        {city_options}
-      </select>
-      <select id="source">
-        <option value="">All sources</option>
-        {source_options}
-      </select>
+      <div class="filter-group">
+        <label for="search">Search</label>
+        <input id="search" type="search" placeholder="Company or title">
+      </div>
+      <div class="filter-group">
+        <label for="location">Locations</label>
+        <select id="location" multiple>{location_options}</select>
+      </div>
+      <div class="filter-group">
+        <label for="role">Roles</label>
+        <select id="role" multiple>{role_options}</select>
+      </div>
+      <div class="filter-group">
+        <label for="source">Sources</label>
+        <select id="source" multiple>{source_options}</select>
+      </div>
     </section>
 
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Company</th>
-          <th>Job</th>
-          <th>Location</th>
-          <th>Source</th>
-        </tr>
-      </thead>
-      <tbody id="jobs">
-        {rows}
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Company</th>
+            <th>Job</th>
+            <th>Location</th>
+            <th>Role</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody id="jobs">
+          {rows}
+        </tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span id="page-summary"></span>
+      <span>
+        <button class="secondary" id="prev" type="button">Previous</button>
+        <button class="secondary" id="next" type="button">Next</button>
+      </span>
+    </div>
     <div id="empty" class="empty">No jobs match the current filters.</div>
   </main>
   <script>
+    const pageSize = 50;
     const search = document.getElementById("search");
-    const city = document.getElementById("city");
-    const source = document.getElementById("source");
+    const locationFilter = document.getElementById("location");
+    const roleFilter = document.getElementById("role");
+    const sourceFilter = document.getElementById("source");
     const rows = Array.from(document.querySelectorAll("#jobs tr"));
     const empty = document.getElementById("empty");
     const refresh = document.getElementById("refresh");
     const status = document.getElementById("status");
+    const prev = document.getElementById("prev");
+    const next = document.getElementById("next");
+    const summary = document.getElementById("page-summary");
+    let page = 1;
+    let filteredRows = rows;
+
+    function selectedValues(select) {{
+      return Array.from(select.selectedOptions).map((option) => option.value);
+    }}
+
+    function matchesSelected(value, selected) {{
+      return selected.length === 0 || selected.includes(value);
+    }}
 
     function applyFilters() {{
       const q = search.value.trim().toLowerCase();
-      const location = city.value;
-      const sourceValue = source.value;
-      let shown = 0;
+      const locations = selectedValues(locationFilter);
+      const roles = selectedValues(roleFilter);
+      const sources = selectedValues(sourceFilter);
+      filteredRows = rows.filter((row) => {{
+        const matchesSearch = !q || row.dataset.search.includes(q);
+        return matchesSearch
+          && matchesSelected(row.dataset.location, locations)
+          && matchesSelected(row.dataset.role, roles)
+          && matchesSelected(row.dataset.source, sources);
+      }});
+      page = 1;
+      renderPage();
+    }}
+
+    function renderPage() {{
+      const pages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+      page = Math.min(page, pages);
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize;
+      const visible = new Set(filteredRows.slice(start, end));
       for (const row of rows) {{
-        const text = row.dataset.search;
-        const matchesSearch = !q || text.includes(q);
-        const matchesCity = !location || row.dataset.location === location;
-        const matchesSource = !sourceValue || row.dataset.source === sourceValue;
-        const visible = matchesSearch && matchesCity && matchesSource;
-        row.style.display = visible ? "" : "none";
-        shown += visible ? 1 : 0;
+        row.style.display = visible.has(row) ? "" : "none";
       }}
-      empty.style.display = shown === 0 ? "block" : "none";
+      empty.style.display = filteredRows.length === 0 ? "block" : "none";
+      prev.disabled = page <= 1;
+      next.disabled = page >= pages;
+      const shownStart = filteredRows.length === 0 ? 0 : start + 1;
+      const shownEnd = Math.min(end, filteredRows.length);
+      summary.textContent = `${{shownStart}}-${{shownEnd}} of ${{filteredRows.length}} jobs`;
     }}
 
     search.addEventListener("input", applyFilters);
-    city.addEventListener("change", applyFilters);
-    source.addEventListener("change", applyFilters);
+    locationFilter.addEventListener("change", applyFilters);
+    roleFilter.addEventListener("change", applyFilters);
+    sourceFilter.addEventListener("change", applyFilters);
+    prev.addEventListener("click", () => {{
+      page -= 1;
+      renderPage();
+    }});
+    next.addEventListener("click", () => {{
+      page += 1;
+      renderPage();
+    }});
     refresh.addEventListener("click", async () => {{
       refresh.disabled = true;
-      status.textContent = "Refreshing...";
+      status.textContent = "Refreshing YC...";
       try {{
         const response = await fetch("/api/refresh", {{ method: "POST" }});
         if (!response.ok) throw new Error("refresh failed");
+        const result = await response.json();
+        if (!result.refreshed) {{
+          status.textContent = result.message;
+          return;
+        }}
         window.location.reload();
       }} catch (error) {{
         status.textContent = "Refresh requires the local server.";
         refresh.disabled = false;
       }}
     }});
+    renderPage();
   </script>
 </body>
 </html>
@@ -306,10 +424,21 @@ def write_dashboard(
     output_path: Path,
     today: date | None = None,
     days: int = 14,
+    last_refresh_at: str | None = None,
+    cooldown_hours: int = 6,
 ) -> Path:
     """Write the local dashboard HTML."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(render_dashboard(jobs, today=today, days=days), encoding="utf-8")
+    output_path.write_text(
+        render_dashboard(
+            jobs,
+            today=today,
+            days=days,
+            last_refresh_at=last_refresh_at,
+            cooldown_hours=cooldown_hours,
+        ),
+        encoding="utf-8",
+    )
     return output_path
 
 
@@ -317,17 +446,29 @@ def _render_row(job: DashboardJob) -> str:
     company = escape(job.company)
     title = escape(job.title)
     location = escape(job.location)
+    role = escape(job.role)
     source = escape(job.source)
     url = escape(job.url, quote=True)
-    search = escape(f"{job.company} {job.title} {job.location} {job.source}".lower(), quote=True)
+    search = escape(
+        f"{job.company} {job.title} {job.location} {job.role} {job.source}".lower(),
+        quote=True,
+    )
     return (
-        f'<tr data-search="{search}" data-location="{location}" data-source="{source}">'
+        f'<tr data-search="{search}" data-location="{location}" '
+        f'data-role="{role}" data-source="{source}">'
         f"<td>{job.visible_date.isoformat()}</td>"
         f"<td>{company}</td>"
         f'<td><a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a></td>'
         f"<td>{location}</td>"
+        f"<td>{role}</td>"
         f"<td>{source}</td>"
         "</tr>"
+    )
+
+
+def _options(values: list[str]) -> str:
+    return "\n".join(
+        f'<option value="{escape(value)}">{escape(value)}</option>' for value in values
     )
 
 
@@ -339,3 +480,52 @@ def _visible_date(job: JobPosting) -> date:
 
 def _date_to_ordinal(value: date) -> int:
     return value.toordinal()
+
+
+def _role_category(title: str) -> str:
+    value = title.lower()
+    if "machine learning" in value or value.startswith("ml "):
+        return "ML"
+    if "ai" in value or "agent" in value:
+        return "AI"
+    if "swe" in value or "software" in value or "sde" in value:
+        return "SWE/SDE"
+    if "data" in value:
+        return "Data"
+    if "product" in value:
+        return "Product"
+    if "design" in value:
+        return "Design"
+    return "Other"
+
+
+def _refresh_metadata(last_refresh_at: str | None, cooldown_hours: int) -> dict[str, object]:
+    if last_refresh_at is None:
+        return {"disabled": False, "status": "Never refreshed"}
+    parsed = _parse_datetime(last_refresh_at)
+    if parsed is None:
+        return {"disabled": False, "status": "Last refresh unknown"}
+    next_refresh = parsed + timedelta(hours=cooldown_hours)
+    now = datetime.now(UTC)
+    if now < next_refresh:
+        return {
+            "disabled": True,
+            "status": (
+                f"Last refresh {parsed.strftime('%Y-%m-%d %H:%M UTC')} · "
+                f"next after {next_refresh.strftime('%H:%M UTC')}"
+            ),
+        }
+    return {
+        "disabled": False,
+        "status": f"Last refresh {parsed.strftime('%Y-%m-%d %H:%M UTC')}",
+    }
+
+
+def _parse_datetime(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
