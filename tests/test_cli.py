@@ -11,9 +11,21 @@ def test_serve_parser_defaults_to_localhost() -> None:
     assert args.ashby_limit == 100
     assert args.google_jobs_limit == 10
     assert args.github_jobs_limit == 250
+    assert args.hn_limit == 80
     assert args.yc_limit == 80
     assert args.max_google_queries == 20
     assert args.cooldown_hours == 6
+    assert args.auth_username is None
+    assert args.auth_password is None
+
+
+def test_serve_parser_accepts_basic_auth() -> None:
+    args = build_parser().parse_args(
+        ["serve", "--auth-username", "akshat", "--auth-password", "secret"]
+    )
+
+    assert args.auth_username == "akshat"
+    assert args.auth_password == "secret"
 
 
 def test_discovery_query_parser() -> None:

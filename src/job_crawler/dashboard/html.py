@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from html import escape
 from pathlib import Path
+from typing import Any
 
 from job_crawler.crawlers.base import JobPosting
 from job_crawler.ranking import is_target_role, is_us_role, rank_job, role_category
@@ -79,10 +81,13 @@ def render_dashboard(
     days: int = 14,
     last_refresh_at: str | None = None,
     cooldown_hours: int = 6,
+    refresh_runs: list[Mapping[str, Any]] | None = None,
 ) -> str:
     """Render a standalone local HTML dashboard."""
     selected = select_dashboard_jobs(jobs, today=today, days=days)
     rows = "\n".join(_render_row(job) for job in selected)
+    refresh_rows = "\n".join(_render_refresh_run(row) for row in (refresh_runs or []))
+    refresh_status = refresh_rows or _render_empty_refresh_run()
     refresh = _refresh_metadata(last_refresh_at, cooldown_hours)
     return f"""<!doctype html>
 <html lang="en">
@@ -170,6 +175,22 @@ def render_dashboard(
       border: 1px solid var(--line);
       border-radius: 8px;
       box-shadow: var(--shadow);
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: end;
+      margin: 34px 0 12px;
+    }}
+    h2 {{
+      margin: 0;
+      font-size: 21px;
+      letter-spacing: 0;
+    }}
+    .error-text {{
+      color: #9f2f2f;
+      max-width: 360px;
     }}
     table {{
       width: 100%;
@@ -267,6 +288,32 @@ def render_dashboard(
       </span>
     </div>
     <div id="empty" class="empty">No jobs match the current filters.</div>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <h2>Refresh Status</h2>
+          <div class="meta">Most recent source runs</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Seen</th>
+              <th>New</th>
+              <th>Finished</th>
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {refresh_status}
+          </tbody>
+        </table>
+      </div>
+    </section>
   </main>
   <script>
     const pageSize = 50;
@@ -337,6 +384,7 @@ def write_dashboard(
     days: int = 14,
     last_refresh_at: str | None = None,
     cooldown_hours: int = 6,
+    refresh_runs: list[Mapping[str, Any]] | None = None,
 ) -> Path:
     """Write the local dashboard HTML."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -347,6 +395,7 @@ def write_dashboard(
             days=days,
             last_refresh_at=last_refresh_at,
             cooldown_hours=cooldown_hours,
+            refresh_runs=refresh_runs,
         ),
         encoding="utf-8",
     )
@@ -367,6 +416,44 @@ def _render_row(job: DashboardJob) -> str:
         f"<td>{location}</td>"
         f"<td>{role}</td>"
         f"<td>{source}</td>"
+        "</tr>"
+    )
+
+
+def _render_refresh_run(row: Mapping[str, Any]) -> str:
+    source_slug = _row_value(row, "source_slug")
+    source = str(_row_value(row, "source_type") or "")
+    if source_slug:
+        source = f"{source}:{source_slug}"
+    status = escape(str(_row_value(row, "status") or "unknown"))
+    seen = escape(str(_row_value(row, "jobs_seen") or 0))
+    inserted = escape(str(_row_value(row, "jobs_inserted") or 0))
+    finished = _format_refresh_time(
+        _row_value(row, "finished_at") or _row_value(row, "started_at")
+    )
+    error = escape(str(_row_value(row, "error") or ""))
+    return (
+        "<tr>"
+        f"<td>{escape(source)}</td>"
+        f"<td>{status}</td>"
+        f"<td>{seen}</td>"
+        f"<td>{inserted}</td>"
+        f"<td>{escape(finished)}</td>"
+        f'<td class="error-text">{error}</td>'
+        "</tr>"
+    )
+
+
+def _row_value(row: Mapping[str, Any], key: str) -> Any:
+    if hasattr(row, "keys") and key in row.keys():
+        return row[key]
+    return row.get(key)
+
+
+def _render_empty_refresh_run() -> str:
+    return (
+        "<tr>"
+        '<td colspan="6">No refresh runs yet.</td>'
         "</tr>"
     )
 
@@ -449,3 +536,12 @@ def _parse_datetime(value: str) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC)
+
+
+def _format_refresh_time(value: object) -> str:
+    if not value:
+        return "n/a"
+    parsed = _parse_datetime(str(value))
+    if parsed is None:
+        return str(value)
+    return parsed.strftime("%Y-%m-%d %H:%M UTC")

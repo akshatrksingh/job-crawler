@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hmac
 import json
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,9 +27,12 @@ class DashboardServerConfig:
         ashby_limit: int,
         google_jobs_limit: int,
         github_jobs_limit: int,
+        hn_limit: int,
         yc_limit: int,
         max_google_queries: int,
         cooldown_hours: int,
+        auth_username: str | None = None,
+        auth_password: str | None = None,
     ) -> None:
         self.db_path = db_path
         self.output_path = output_path
@@ -36,9 +41,17 @@ class DashboardServerConfig:
         self.ashby_limit = ashby_limit
         self.google_jobs_limit = google_jobs_limit
         self.github_jobs_limit = github_jobs_limit
+        self.hn_limit = hn_limit
         self.yc_limit = yc_limit
         self.max_google_queries = max_google_queries
         self.cooldown_hours = cooldown_hours
+        self.auth_username = auth_username
+        self.auth_password = auth_password
+
+    @property
+    def auth_enabled(self) -> bool:
+        """Whether requests should require Basic Auth."""
+        return bool(self.auth_username and self.auth_password)
 
 
 def run_dashboard_server(
@@ -52,9 +65,12 @@ def run_dashboard_server(
     ashby_limit: int = 100,
     google_jobs_limit: int = 10,
     github_jobs_limit: int = 250,
+    hn_limit: int = 80,
     yc_limit: int = 80,
     max_google_queries: int = 20,
     cooldown_hours: int = 6,
+    auth_username: str | None = None,
+    auth_password: str | None = None,
 ) -> None:
     """Serve the local dashboard until interrupted."""
     config = DashboardServerConfig(
@@ -65,9 +81,12 @@ def run_dashboard_server(
         ashby_limit=ashby_limit,
         google_jobs_limit=google_jobs_limit,
         github_jobs_limit=github_jobs_limit,
+        hn_limit=hn_limit,
         yc_limit=yc_limit,
         max_google_queries=max_google_queries,
         cooldown_hours=cooldown_hours,
+        auth_username=auth_username,
+        auth_password=auth_password,
     )
     handler = _build_handler(config)
     server = ThreadingHTTPServer((host, port), handler)
@@ -84,6 +103,12 @@ def run_dashboard_server(
 def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler]:
     class DashboardRequestHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
+            if self.path == "/health":
+                self._send_bytes(b"ok\n", content_type="text/plain; charset=utf-8")
+                return
+            if not _is_authorized(self.headers.get("Authorization"), config):
+                self._send_auth_required()
+                return
             if self.path not in {"/", "/index.html"}:
                 self.send_error(HTTPStatus.NOT_FOUND)
                 return
@@ -91,6 +116,9 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
             self._send_bytes(html.encode("utf-8"), content_type="text/html; charset=utf-8")
 
         def do_POST(self) -> None:
+            if not _is_authorized(self.headers.get("Authorization"), config):
+                self._send_auth_required()
+                return
             if self.path == "/api/refresh":
                 self._handle_refresh()
                 return
@@ -105,6 +133,7 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
                 ashby_limit=config.ashby_limit,
                 google_jobs_limit=config.google_jobs_limit,
                 github_jobs_limit=config.github_jobs_limit,
+                hn_limit=config.hn_limit,
                 yc_limit=config.yc_limit,
                 max_google_queries=config.max_google_queries,
                 cooldown_hours=config.cooldown_hours,
@@ -155,6 +184,12 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
         def log_message(self, format: str, *args: object) -> None:
             return
 
+        def _send_auth_required(self) -> None:
+            self.send_response(HTTPStatus.UNAUTHORIZED)
+            self.send_header("WWW-Authenticate", 'Basic realm="job-crawler"')
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
         def _send_bytes(
             self,
             body: bytes,
@@ -171,6 +206,25 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
 
     return DashboardRequestHandler
 
+
+def _is_authorized(header: str | None, config: DashboardServerConfig) -> bool:
+    if not config.auth_enabled:
+        return True
+    if not header or not header.startswith("Basic "):
+        return False
+    try:
+        decoded = base64.b64decode(header.removeprefix("Basic ").strip()).decode("utf-8")
+    except ValueError:
+        return False
+    username, separator, password = decoded.partition(":")
+    if separator != ":":
+        return False
+    return hmac.compare_digest(username, config.auth_username or "") and hmac.compare_digest(
+        password,
+        config.auth_password or "",
+    )
+
+
 def _render_current_dashboard(config: DashboardServerConfig) -> str:
     with open_database(config.db_path) as connection:
         repo = JobRepository(connection)
@@ -179,4 +233,5 @@ def _render_current_dashboard(config: DashboardServerConfig) -> str:
             days=config.days,
             last_refresh_at=repo.get_app_state("last_refresh_at"),
             cooldown_hours=config.cooldown_hours,
+            refresh_runs=repo.list_recent_crawl_runs(),
         )

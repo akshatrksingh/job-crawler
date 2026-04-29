@@ -374,6 +374,29 @@ class JobRepository:
             for row in rows
         ]
 
+    def list_recent_crawl_runs(self, *, limit: int = 25) -> list[sqlite3.Row]:
+        """Return recent source refresh runs for dashboard diagnostics."""
+        return list(
+            self.connection.execute(
+                """
+                SELECT
+                    crawl_runs.source_type,
+                    sources.slug AS source_slug,
+                    crawl_runs.started_at,
+                    crawl_runs.finished_at,
+                    crawl_runs.status,
+                    crawl_runs.jobs_seen,
+                    crawl_runs.jobs_inserted,
+                    crawl_runs.error
+                FROM crawl_runs
+                LEFT JOIN sources ON sources.id = crawl_runs.source_id
+                ORDER BY crawl_runs.started_at DESC, crawl_runs.id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+        )
+
     def get_app_state(self, key: str) -> str | None:
         """Read a persisted app state value."""
         row = self.connection.execute(

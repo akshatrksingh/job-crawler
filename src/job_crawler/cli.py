@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 from job_crawler.discovery import (
     build_discovery_queries,
@@ -16,6 +19,7 @@ from job_crawler.storage import JobRepository, open_database
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI parser."""
+    load_dotenv()
     parser = argparse.ArgumentParser(prog="job-crawler")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -29,9 +33,12 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--ashby-limit", type=int, default=100)
     serve.add_argument("--google-jobs-limit", type=int, default=10)
     serve.add_argument("--github-jobs-limit", type=int, default=250)
+    serve.add_argument("--hn-limit", type=int, default=80)
     serve.add_argument("--yc-limit", type=int, default=80)
     serve.add_argument("--max-google-queries", type=int, default=20)
     serve.add_argument("--cooldown-hours", type=int, default=6)
+    serve.add_argument("--auth-username", default=_env_value("JOB_CRAWLER_AUTH_USERNAME"))
+    serve.add_argument("--auth-password", default=_env_value("JOB_CRAWLER_AUTH_PASSWORD"))
 
     queries = subparsers.add_parser(
         "discovery-queries",
@@ -75,9 +82,12 @@ def main(argv: list[str] | None = None) -> None:
             ashby_limit=args.ashby_limit,
             google_jobs_limit=args.google_jobs_limit,
             github_jobs_limit=args.github_jobs_limit,
+            hn_limit=args.hn_limit,
             yc_limit=args.yc_limit,
             max_google_queries=args.max_google_queries,
             cooldown_hours=args.cooldown_hours,
+            auth_username=args.auth_username,
+            auth_password=args.auth_password,
         )
     elif args.command == "discovery-queries":
         for query in build_discovery_queries(limit=args.limit):
@@ -105,6 +115,10 @@ def _collect_urls(urls: list[str], file: Path | None) -> list[str]:
             if line.strip() and not line.strip().startswith("#")
         )
     return collected
+
+
+def _env_value(name: str) -> str | None:
+    return os.getenv(name) or None
 
 
 def _store_discovered_sources(

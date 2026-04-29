@@ -15,6 +15,7 @@ from job_crawler.crawlers.google_jobs import (
     fetch_google_jobs,
 )
 from job_crawler.crawlers.greenhouse import fetch_greenhouse_jobs
+from job_crawler.crawlers.hn import fetch_hn_who_is_hiring_jobs
 from job_crawler.crawlers.lever import fetch_lever_jobs
 from job_crawler.crawlers.yc import fetch_yc_jobs
 from job_crawler.dashboard import write_dashboard
@@ -25,6 +26,7 @@ JobFetcher = Callable[..., list[JobPosting]]
 SourceFetcher = Callable[..., list[JobPosting]]
 GoogleFetcher = Callable[..., list[JobPosting]]
 GitHubBoardsFetcher = Callable[..., list[JobPosting]]
+HnFetcher = Callable[..., list[JobPosting]]
 WebDiscoveryFetcher = Callable[..., list]
 
 
@@ -86,7 +88,13 @@ def refresh_yc(
             next_refresh_at = last_refresh_at + timedelta(hours=cooldown_hours)
             if not force and now < next_refresh_at:
                 jobs = repo.list_jobs_for_digest(limit=candidate_limit)
-                write_dashboard(jobs, output_path=output_path, days=days)
+                refresh_runs = repo.list_recent_crawl_runs()
+                write_dashboard(
+                    jobs,
+                    output_path=output_path,
+                    days=days,
+                    refresh_runs=refresh_runs,
+                )
                 return RefreshResult(
                     sources=(),
                     candidates=len(jobs),
@@ -103,8 +111,9 @@ def refresh_yc(
         next_refresh_at = refreshed_at + timedelta(hours=cooldown_hours)
         repo.set_app_state(REFRESH_STATE_KEY, refreshed_at.isoformat())
         jobs = repo.list_jobs_for_digest(limit=candidate_limit)
+        refresh_runs = repo.list_recent_crawl_runs()
 
-    write_dashboard(jobs, output_path=output_path, days=days)
+    write_dashboard(jobs, output_path=output_path, days=days, refresh_runs=refresh_runs)
     return RefreshResult(
         sources=tuple(source_results),
         candidates=len(jobs),
@@ -122,6 +131,7 @@ def refresh_jobs(
     ashby_limit: int = 100,
     google_jobs_limit: int = 10,
     github_jobs_limit: int = 250,
+    hn_limit: int = 80,
     yc_limit: int = 80,
     max_google_queries: int = 20,
     web_discovery_queries: int = 20,
@@ -132,6 +142,7 @@ def refresh_jobs(
     lever_fetcher: SourceFetcher = fetch_lever_jobs,
     google_fetcher: GoogleFetcher = fetch_google_jobs,
     github_boards_fetcher: GitHubBoardsFetcher = fetch_default_github_board_jobs,
+    hn_fetcher: HnFetcher = fetch_hn_who_is_hiring_jobs,
     yc_fetcher: JobFetcher = fetch_yc_jobs,
     web_discovery_fetcher: WebDiscoveryFetcher = discover_sources_from_web_search,
     cooldown_hours: int = 6,
@@ -147,7 +158,13 @@ def refresh_jobs(
             next_refresh_at = last_refresh_at + timedelta(hours=cooldown_hours)
             if not force and now < next_refresh_at:
                 jobs = repo.list_jobs_for_digest(limit=candidate_limit)
-                write_dashboard(jobs, output_path=output_path, days=days)
+                refresh_runs = repo.list_recent_crawl_runs()
+                write_dashboard(
+                    jobs,
+                    output_path=output_path,
+                    days=days,
+                    refresh_runs=refresh_runs,
+                )
                 return RefreshResult(
                     sources=(),
                     candidates=len(jobs),
@@ -202,6 +219,14 @@ def refresh_jobs(
         source_results.append(
             _refresh_source(
                 repo,
+                source="hn",
+                fetcher=hn_fetcher,
+                limit=hn_limit,
+            )
+        )
+        source_results.append(
+            _refresh_source(
+                repo,
                 source="yc",
                 fetcher=yc_fetcher,
                 limit=yc_limit,
@@ -211,8 +236,9 @@ def refresh_jobs(
         next_refresh_at = refreshed_at + timedelta(hours=cooldown_hours)
         repo.set_app_state(REFRESH_STATE_KEY, refreshed_at.isoformat())
         jobs = repo.list_jobs_for_digest(limit=candidate_limit)
+        refresh_runs = repo.list_recent_crawl_runs()
 
-    write_dashboard(jobs, output_path=output_path, days=days)
+    write_dashboard(jobs, output_path=output_path, days=days, refresh_runs=refresh_runs)
     return RefreshResult(
         sources=tuple(source_results),
         candidates=len(jobs),

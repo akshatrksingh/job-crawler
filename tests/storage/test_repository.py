@@ -142,3 +142,28 @@ def test_source_crawl_state_supports_rate_limit_friendly_reruns() -> None:
         assert row["last_crawled_at"] is not None
         assert row["next_crawl_after"] == "2026-04-30T12:00:00"
         assert row["crawl_interval_seconds"] == 43_200
+
+
+def test_list_recent_crawl_runs_includes_source_slug() -> None:
+    with open_database(":memory:") as connection:
+        repo = JobRepository(connection)
+        source_id = repo.upsert_source(
+            source_type="ashby",
+            slug="example-company",
+            base_url="https://jobs.ashbyhq.com/example-company",
+        )
+        run_id = repo.start_crawl_run(source_type="ashby", source_id=source_id)
+        repo.finish_crawl_run(
+            crawl_run_id=run_id,
+            status="failed",
+            jobs_seen=3,
+            jobs_inserted=1,
+            error="network issue",
+        )
+
+        runs = repo.list_recent_crawl_runs()
+
+        assert len(runs) == 1
+        assert runs[0]["source_type"] == "ashby"
+        assert runs[0]["source_slug"] == "example-company"
+        assert runs[0]["error"] == "network issue"

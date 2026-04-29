@@ -5,12 +5,13 @@ Personal job crawling pipeline for finding ML engineer, AI engineer, agentic AI,
 The pipeline will:
 
 - Discover companies dynamically from search results instead of using a hardcoded company list.
-- Crawl Greenhouse, Lever, Ashby, Google Jobs, and YC Work at a Startup.
+- Crawl Greenhouse, Lever, Ashby, Google Jobs, Hacker News Who is Hiring, and YC Work at a Startup.
 - Store jobs and crawl metadata in SQLite.
 - Deduplicate jobs so previously seen roles are not shown again.
 - Filter and rank jobs with zero-cost heuristics.
 - Produce a daily Markdown digest with a simple list of the best jobs.
-- Generate a local private dashboard page showing recent fetched jobs.
+- Generate a private dashboard page showing recent fetched jobs and refresh errors.
+- Run locally or in Docker with SQLite on a persistent volume.
 
 Optional future semantic filtering can use Groq. Put a Groq key in `.env` as
 `GROQ_API_KEY=...` only after the feature is implemented and explicitly enabled.
@@ -35,6 +36,22 @@ digests/        Generated daily Markdown digests, ignored by git
 docs/           Design notes and decisions
 ```
 
-## Status
+## Local Dashboard
 
-Initial scaffold only. Implementation will be added source by source.
+```bash
+PYTHONPATH=src uv run python -m job_crawler.cli serve --port 8782
+```
+
+Open `http://127.0.0.1:8782/` and click Refresh.
+
+## Deployment
+
+See `docs/deployment.md`. Deployed instances should set:
+
+```text
+JOB_CRAWLER_DB_PATH=/var/data/job_crawler.sqlite
+JOB_CRAWLER_AUTH_USERNAME=<your username>
+JOB_CRAWLER_AUTH_PASSWORD=<strong password>
+```
+
+SQLite must be on persistent disk if you want history to survive deploys.

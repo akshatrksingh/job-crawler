@@ -78,7 +78,6 @@ def test_select_dashboard_jobs_uses_first_seen_window_when_posted_date_is_missin
     assert "Fresh Seen Co" in html
     assert "Old Seen Co" not in html
     assert "<th>Posted</th>" not in html
-    assert "<th>Seen</th>" not in html
 
 
 def test_render_dashboard_has_pagination_and_no_filters_or_hard_limit() -> None:
@@ -95,7 +94,7 @@ def test_render_dashboard_has_pagination_and_no_filters_or_hard_limit() -> None:
 
     html = render_dashboard(jobs, today=today, days=14)
 
-    assert html.count("<tr>") == 31
+    assert html.count("<tr>") == 33
     assert 'id="prev"' in html
     assert 'id="next"' in html
     assert 'id="search"' not in html
@@ -103,6 +102,28 @@ def test_render_dashboard_has_pagination_and_no_filters_or_hard_limit() -> None:
     assert 'id="role"' not in html
     assert 'id="source"' not in html
     assert "Seattle, WA" in html
+    assert "Refresh Status" in html
+
+
+def test_render_dashboard_shows_refresh_errors() -> None:
+    html = render_dashboard(
+        [],
+        refresh_runs=[
+            {
+                "source_type": "greenhouse",
+                "source_slug": "example",
+                "status": "failed",
+                "jobs_seen": 0,
+                "jobs_inserted": 0,
+                "finished_at": "2026-04-29 12:00:00",
+                "error": "network issue",
+            }
+        ],
+    )
+
+    assert "greenhouse:example" in html
+    assert "failed" in html
+    assert "network issue" in html
 
 
 def test_render_dashboard_has_no_manual_discovery_controls() -> None:
