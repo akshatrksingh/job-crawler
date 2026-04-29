@@ -1,0 +1,1 @@
+"""Daily Markdown digest generation."""
