@@ -8,7 +8,7 @@ from html import escape
 from pathlib import Path
 
 from job_crawler.crawlers.base import JobPosting
-from job_crawler.ranking import rank_job
+from job_crawler.ranking import rank_job, role_category
 
 
 @dataclass(frozen=True)
@@ -53,7 +53,7 @@ def select_dashboard_jobs(
                 url=job.url,
                 location=job.location or "Unknown",
                 source=job.source,
-                role=_role_category(job.title),
+                role=role_category(job.title),
                 visible_date=visible_date,
                 rank_score=ranked.score,
             )
@@ -80,12 +80,6 @@ def render_dashboard(
     """Render a standalone local HTML dashboard."""
     selected = select_dashboard_jobs(jobs, today=today, days=days)
     rows = "\n".join(_render_row(job) for job in selected)
-    locations = sorted({job.location for job in selected})
-    roles = sorted({job.role for job in selected})
-    sources = sorted({job.source for job in selected})
-    location_options = _options(locations)
-    role_options = _options(roles)
-    source_options = _options(sources)
     refresh = _refresh_metadata(last_refresh_at, cooldown_hours)
     refresh_disabled = "disabled" if refresh["disabled"] else ""
     return f"""<!doctype html>
@@ -168,36 +162,6 @@ def render_dashboard(
       cursor: not-allowed;
       opacity: 0.58;
     }}
-    .filters {{
-      display: grid;
-      grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(160px, 210px));
-      gap: 12px;
-      margin: 18px 0;
-    }}
-    .filter-group {{
-      display: grid;
-      gap: 6px;
-    }}
-    label {{
-      color: var(--muted);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 12px;
-      font-weight: 650;
-    }}
-    input, select {{
-      width: 100%;
-      min-height: 42px;
-      border: 1px solid var(--line);
-      border-radius: 7px;
-      padding: 8px 10px;
-      background: var(--panel);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 14px;
-    }}
-    select[multiple] {{
-      min-height: 104px;
-    }}
     .table-wrap {{
       overflow: auto;
       background: var(--panel);
@@ -254,11 +218,8 @@ def render_dashboard(
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }}
     @media (max-width: 860px) {{
-      header, .filters {{
+      header {{
         display: block;
-      }}
-      .filter-group {{
-        margin-bottom: 12px;
       }}
       .actions {{
         justify-content: start;
@@ -279,25 +240,6 @@ def render_dashboard(
         <div id="status" class="status">{escape(refresh["status"])}</div>
       </div>
     </header>
-
-    <section class="filters" aria-label="Filters">
-      <div class="filter-group">
-        <label for="search">Search</label>
-        <input id="search" type="search" placeholder="Company or title">
-      </div>
-      <div class="filter-group">
-        <label for="location">Locations</label>
-        <select id="location" multiple>{location_options}</select>
-      </div>
-      <div class="filter-group">
-        <label for="role">Roles</label>
-        <select id="role" multiple>{role_options}</select>
-      </div>
-      <div class="filter-group">
-        <label for="source">Sources</label>
-        <select id="source" multiple>{source_options}</select>
-      </div>
-    </section>
 
     <div class="table-wrap">
       <table>
@@ -327,10 +269,6 @@ def render_dashboard(
   </main>
   <script>
     const pageSize = 50;
-    const search = document.getElementById("search");
-    const locationFilter = document.getElementById("location");
-    const roleFilter = document.getElementById("role");
-    const sourceFilter = document.getElementById("source");
     const rows = Array.from(document.querySelectorAll("#jobs tr"));
     const empty = document.getElementById("empty");
     const refresh = document.getElementById("refresh");
@@ -340,30 +278,6 @@ def render_dashboard(
     const summary = document.getElementById("page-summary");
     let page = 1;
     let filteredRows = rows;
-
-    function selectedValues(select) {{
-      return Array.from(select.selectedOptions).map((option) => option.value);
-    }}
-
-    function matchesSelected(value, selected) {{
-      return selected.length === 0 || selected.includes(value);
-    }}
-
-    function applyFilters() {{
-      const q = search.value.trim().toLowerCase();
-      const locations = selectedValues(locationFilter);
-      const roles = selectedValues(roleFilter);
-      const sources = selectedValues(sourceFilter);
-      filteredRows = rows.filter((row) => {{
-        const matchesSearch = !q || row.dataset.search.includes(q);
-        return matchesSearch
-          && matchesSelected(row.dataset.location, locations)
-          && matchesSelected(row.dataset.role, roles)
-          && matchesSelected(row.dataset.source, sources);
-      }});
-      page = 1;
-      renderPage();
-    }}
 
     function renderPage() {{
       const pages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -382,10 +296,6 @@ def render_dashboard(
       summary.textContent = `${{shownStart}}-${{shownEnd}} of ${{filteredRows.length}} jobs`;
     }}
 
-    search.addEventListener("input", applyFilters);
-    locationFilter.addEventListener("change", applyFilters);
-    roleFilter.addEventListener("change", applyFilters);
-    sourceFilter.addEventListener("change", applyFilters);
     prev.addEventListener("click", () => {{
       page -= 1;
       renderPage();
@@ -449,13 +359,8 @@ def _render_row(job: DashboardJob) -> str:
     role = escape(job.role)
     source = escape(job.source)
     url = escape(job.url, quote=True)
-    search = escape(
-        f"{job.company} {job.title} {job.location} {job.role} {job.source}".lower(),
-        quote=True,
-    )
     return (
-        f'<tr data-search="{search}" data-location="{location}" '
-        f'data-role="{role}" data-source="{source}">'
+        "<tr>"
         f"<td>{job.visible_date.isoformat()}</td>"
         f"<td>{company}</td>"
         f'<td><a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a></td>'
@@ -463,12 +368,6 @@ def _render_row(job: DashboardJob) -> str:
         f"<td>{role}</td>"
         f"<td>{source}</td>"
         "</tr>"
-    )
-
-
-def _options(values: list[str]) -> str:
-    return "\n".join(
-        f'<option value="{escape(value)}">{escape(value)}</option>' for value in values
     )
 
 
@@ -480,23 +379,6 @@ def _visible_date(job: JobPosting) -> date:
 
 def _date_to_ordinal(value: date) -> int:
     return value.toordinal()
-
-
-def _role_category(title: str) -> str:
-    value = title.lower()
-    if "machine learning" in value or value.startswith("ml "):
-        return "ML"
-    if "ai" in value or "agent" in value:
-        return "AI"
-    if "swe" in value or "software" in value or "sde" in value:
-        return "SWE/SDE"
-    if "data" in value:
-        return "Data"
-    if "product" in value:
-        return "Product"
-    if "design" in value:
-        return "Design"
-    return "Other"
 
 
 def _refresh_metadata(last_refresh_at: str | None, cooldown_hours: int) -> dict[str, object]:

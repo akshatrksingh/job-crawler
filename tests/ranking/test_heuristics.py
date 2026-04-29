@@ -1,5 +1,5 @@
 from job_crawler.crawlers.base import JobPosting
-from job_crawler.ranking import LocationTier, is_senior_role, location_tier, rank_job
+from job_crawler.ranking import LocationTier, is_senior_role, location_tier, rank_job, role_category
 
 
 def make_job(title: str, location: str | None, description: str | None = None) -> JobPosting:
@@ -42,3 +42,10 @@ def test_rank_job_excludes_senior_staff_and_lead_roles() -> None:
     assert rank_job(senior).excluded is True
     assert rank_job(staff).excluded is True
     assert rank_job(junior).excluded is False
+
+
+def test_role_category_handles_target_role_variations() -> None:
+    assert role_category("Machine Learning Engineer") == "ML"
+    assert role_category("AI Engineer") == "AI"
+    assert role_category("Software Development Engineer") == "SWE/SDE"
+    assert role_category("Backend Platform Engineer") == "Infrastructure"

@@ -12,6 +12,9 @@ The pipeline will:
 - Produce a daily Markdown digest with a simple list of the best jobs.
 - Generate a local private dashboard page showing recent fetched jobs.
 
+Optional future semantic filtering can use Groq. Put a Groq key in `.env` as
+`GROQ_API_KEY=...` only after the feature is implemented and explicitly enabled.
+
 No auto-apply behavior belongs in this project.
 
 ## Project Layout

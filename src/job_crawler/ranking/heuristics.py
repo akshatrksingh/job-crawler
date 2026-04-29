@@ -46,15 +46,50 @@ MAJOR_US_CITY_KEYWORDS = (
 
 ROLE_KEYWORDS = (
     "machine learning",
+    "machine learning engineer",
+    "ml",
     "ml engineer",
     "ai engineer",
+    "artificial intelligence",
     "agent",
+    "agentic",
+    "agents",
     "applied ai",
     "software engineer",
+    "software engineering",
     "swe",
     "sde",
+    "software development engineer",
+    "full stack",
+    "full-stack",
+    "platform engineer",
     "backend",
+    "back end",
+    "backend engineer",
     "infrastructure",
+    "infra",
+    "data engineer",
+    "research engineer",
+)
+
+ROLE_FILTER_OPTIONS = (
+    "AI",
+    "ML",
+    "SWE/SDE",
+    "Backend",
+    "Data",
+    "Infrastructure",
+    "Product",
+    "Design",
+    "Other",
+)
+
+SOURCE_FILTER_OPTIONS = (
+    "ashby",
+    "greenhouse",
+    "lever",
+    "yc",
+    "google_jobs",
 )
 
 EARLY_CAREER_KEYWORDS = (
@@ -129,6 +164,28 @@ def is_senior_role(job: JobPosting) -> bool:
     """Return true for seniority levels the user wants to avoid."""
     title = job.title.lower()
     return any(keyword in title for keyword in SENIOR_KEYWORDS)
+
+
+def role_category(title: str) -> str:
+    """Classify a title into a stable dashboard role bucket."""
+    value = title.lower()
+    if "machine learning" in value or "ml" in value:
+        return "ML"
+    if "ai" in value or "artificial intelligence" in value or "agent" in value:
+        return "AI"
+    if "data" in value:
+        return "Data"
+    if "infra" in value or "platform" in value:
+        return "Infrastructure"
+    if "backend" in value or "back end" in value:
+        return "Backend"
+    if "swe" in value or "software" in value or "sde" in value:
+        return "SWE/SDE"
+    if "product" in value:
+        return "Product"
+    if "design" in value:
+        return "Design"
+    return "Other"
 
 
 def location_tier(location: str | None) -> LocationTier:

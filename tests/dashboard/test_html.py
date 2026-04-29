@@ -44,7 +44,7 @@ def test_select_dashboard_jobs_keeps_only_last_14_days() -> None:
     assert [job.company for job in selected] == ["Fresh Co"]
 
 
-def test_render_dashboard_includes_filters_and_no_hard_limit() -> None:
+def test_render_dashboard_has_pagination_and_no_filters_or_hard_limit() -> None:
     today = date(2026, 4, 29)
     jobs = [
         make_job(
@@ -58,13 +58,13 @@ def test_render_dashboard_includes_filters_and_no_hard_limit() -> None:
 
     html = render_dashboard(jobs, today=today, days=14)
 
-    assert html.count("<tr data-search=") == 30
-    assert 'id="search"' in html
-    assert 'id="location"' in html
-    assert 'id="role"' in html
-    assert 'id="source"' in html
+    assert html.count("<tr>") == 31
     assert 'id="prev"' in html
     assert 'id="next"' in html
+    assert 'id="search"' not in html
+    assert 'id="location"' not in html
+    assert 'id="role"' not in html
+    assert 'id="source"' not in html
     assert "Seattle, WA" in html
 
 

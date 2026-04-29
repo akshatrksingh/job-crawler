@@ -62,6 +62,8 @@ These are strict operating rules for this project.
 
 - Do not add LLM/resume scoring unless the user explicitly re-adds it.
 - Keep default ranking cost-free and deterministic.
+- If Groq semantic filtering is added later, it must be optional, cached, and
+  disabled unless `GROQ_API_KEY` is configured.
 - Prioritize NYC and SF first, then other major US cities such as Seattle,
   Boston, Austin, Los Angeles, Chicago, Denver, Washington DC, and Atlanta.
 - Include Remote US roles.

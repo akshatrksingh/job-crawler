@@ -109,6 +109,8 @@ Discovery requirements:
 - The dashboard should show newest jobs first.
 - The dashboard should provide simple filters such as search, location, and
   source.
+- The dashboard should not include filter controls by default. Jobs are fetched
+  broadly across the US and ranked with major-city preference.
 - Do not publish the dashboard to the internet or add hosting/auth without user
   approval.
 
@@ -236,3 +238,23 @@ Reason: User wants to avoid repeated fetching, rate limits, and abuse.
 Impact: The dashboard shows last refresh time and next allowed refresh time.
 Temporary or permanent: Permanent default; cooldown length can be changed later.
 Follow-up: Apply the same cooldown/backoff pattern when ATS refresh is added.
+
+Decision changed: Dashboard filters.
+Previous plan: Include search, location, role, and source filters.
+New plan: Remove all dashboard filters.
+Reason: User wants the page to stay simple and not require role/source filtering.
+Impact: Fetching should stay broad; ranking can still favor relevant roles and
+bigger US cities behind the scenes.
+Temporary or permanent: Permanent unless the dashboard gets too noisy.
+Follow-up: Add semantic role filtering only after a free Groq path is wired in.
+
+Decision changed: Semantic role filtering.
+Previous plan: Use deterministic role heuristics only.
+New plan: Keep deterministic heuristics now, but allow a future optional Groq
+semantic role filter.
+Reason: User is interested in semantic filtering for adjacent tech roles.
+Impact: No Groq calls are made yet. If added, the key belongs in `.env` as
+`GROQ_API_KEY`.
+Temporary or permanent: Planned optional enhancement.
+Follow-up: Add Groq only behind explicit opt-in and cache classifications so
+jobs are not reclassified repeatedly.
