@@ -29,7 +29,6 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--ashby-limit", type=int, default=100)
     serve.add_argument("--google-jobs-limit", type=int, default=10)
     serve.add_argument("--github-jobs-limit", type=int, default=250)
-    serve.add_argument("--linkedin-posts-limit", type=int, default=40)
     serve.add_argument("--yc-limit", type=int, default=80)
     serve.add_argument("--max-google-queries", type=int, default=20)
     serve.add_argument("--cooldown-hours", type=int, default=6)
@@ -76,7 +75,6 @@ def main(argv: list[str] | None = None) -> None:
             ashby_limit=args.ashby_limit,
             google_jobs_limit=args.google_jobs_limit,
             github_jobs_limit=args.github_jobs_limit,
-            linkedin_posts_limit=args.linkedin_posts_limit,
             yc_limit=args.yc_limit,
             max_google_queries=args.max_google_queries,
             cooldown_hours=args.cooldown_hours,

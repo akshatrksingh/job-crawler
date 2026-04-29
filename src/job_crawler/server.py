@@ -25,7 +25,6 @@ class DashboardServerConfig:
         ashby_limit: int,
         google_jobs_limit: int,
         github_jobs_limit: int,
-        linkedin_posts_limit: int,
         yc_limit: int,
         max_google_queries: int,
         cooldown_hours: int,
@@ -37,7 +36,6 @@ class DashboardServerConfig:
         self.ashby_limit = ashby_limit
         self.google_jobs_limit = google_jobs_limit
         self.github_jobs_limit = github_jobs_limit
-        self.linkedin_posts_limit = linkedin_posts_limit
         self.yc_limit = yc_limit
         self.max_google_queries = max_google_queries
         self.cooldown_hours = cooldown_hours
@@ -54,7 +52,6 @@ def run_dashboard_server(
     ashby_limit: int = 100,
     google_jobs_limit: int = 10,
     github_jobs_limit: int = 250,
-    linkedin_posts_limit: int = 40,
     yc_limit: int = 80,
     max_google_queries: int = 20,
     cooldown_hours: int = 6,
@@ -68,7 +65,6 @@ def run_dashboard_server(
         ashby_limit=ashby_limit,
         google_jobs_limit=google_jobs_limit,
         github_jobs_limit=github_jobs_limit,
-        linkedin_posts_limit=linkedin_posts_limit,
         yc_limit=yc_limit,
         max_google_queries=max_google_queries,
         cooldown_hours=cooldown_hours,
@@ -109,7 +105,6 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
                 ashby_limit=config.ashby_limit,
                 google_jobs_limit=config.google_jobs_limit,
                 github_jobs_limit=config.github_jobs_limit,
-                linkedin_posts_limit=config.linkedin_posts_limit,
                 yc_limit=config.yc_limit,
                 max_google_queries=config.max_google_queries,
                 cooldown_hours=config.cooldown_hours,

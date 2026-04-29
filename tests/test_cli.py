@@ -11,7 +11,6 @@ def test_serve_parser_defaults_to_localhost() -> None:
     assert args.ashby_limit == 100
     assert args.google_jobs_limit == 10
     assert args.github_jobs_limit == 250
-    assert args.linkedin_posts_limit == 40
     assert args.yc_limit == 80
     assert args.max_google_queries == 20
     assert args.cooldown_hours == 6

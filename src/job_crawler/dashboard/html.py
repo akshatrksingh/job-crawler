@@ -8,7 +8,6 @@ from html import escape
 from pathlib import Path
 
 from job_crawler.crawlers.base import JobPosting
-from job_crawler.crawlers.linkedin_posts import LINKEDIN_POST_SOURCE
 from job_crawler.ranking import is_target_role, is_us_role, rank_job, role_category
 
 
@@ -37,8 +36,6 @@ def select_dashboard_jobs(
     cutoff = current_date - timedelta(days=days)
     selected: list[DashboardJob] = []
     for job in jobs:
-        if job.source == LINKEDIN_POST_SOURCE:
-            continue
         if job.source == "yc" and "/jobs/role/" in job.url:
             continue
         if not is_target_role(job):
@@ -75,44 +72,6 @@ def select_dashboard_jobs(
     return _interleave_location_buckets(ranked)
 
 
-def select_linkedin_post_leads(
-    jobs: list[JobPosting],
-    *,
-    today: date | None = None,
-    days: int = 14,
-    limit: int = 50,
-) -> list[DashboardJob]:
-    """Select rough LinkedIn post leads from public search-result snippets."""
-    current_date = today or datetime.now(UTC).date()
-    cutoff = current_date - timedelta(days=days)
-    leads: list[DashboardJob] = []
-    for job in jobs:
-        if job.source != LINKEDIN_POST_SOURCE:
-            continue
-        if _window_date(job) < cutoff:
-            continue
-        leads.append(
-            DashboardJob(
-                company=job.company,
-                title=job.title,
-                url=job.url,
-                location=job.location or "Unknown",
-                source=job.source,
-                role=role_category(job.title),
-                seen_date=_seen_date(job),
-                rank_score=0,
-            )
-        )
-    return sorted(
-        leads,
-        key=lambda job: (
-            -_date_to_ordinal(job.seen_date),
-            job.company.lower(),
-            job.title.lower(),
-        ),
-    )[:limit]
-
-
 def render_dashboard(
     jobs: list[JobPosting],
     *,
@@ -123,10 +82,7 @@ def render_dashboard(
 ) -> str:
     """Render a standalone local HTML dashboard."""
     selected = select_dashboard_jobs(jobs, today=today, days=days)
-    linkedin_leads = select_linkedin_post_leads(jobs, today=today, days=days)
     rows = "\n".join(_render_row(job) for job in selected)
-    linkedin_rows = "\n".join(_render_linkedin_row(job) for job in linkedin_leads)
-    linkedin_meta = f"{len(linkedin_leads)} public search-result leads from the last {days} days"
     refresh = _refresh_metadata(last_refresh_at, cooldown_hours)
     return f"""<!doctype html>
 <html lang="en">
@@ -214,18 +170,6 @@ def render_dashboard(
       border: 1px solid var(--line);
       border-radius: 8px;
       box-shadow: var(--shadow);
-    }}
-    .section-head {{
-      display: flex;
-      justify-content: space-between;
-      gap: 14px;
-      align-items: end;
-      margin: 34px 0 12px;
-    }}
-    h2 {{
-      margin: 0;
-      font-size: 21px;
-      letter-spacing: 0;
     }}
     table {{
       width: 100%;
@@ -323,30 +267,6 @@ def render_dashboard(
       </span>
     </div>
     <div id="empty" class="empty">No jobs match the current filters.</div>
-
-    <section>
-      <div class="section-head">
-        <div>
-          <h2>LinkedIn Hiring Post Leads</h2>
-          <div class="meta">{escape(linkedin_meta)}</div>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Source</th>
-              <th>Post</th>
-              <th>Location</th>
-              <th>Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            {linkedin_rows}
-          </tbody>
-        </table>
-      </div>
-    </section>
   </main>
   <script>
     const pageSize = 50;
@@ -447,22 +367,6 @@ def _render_row(job: DashboardJob) -> str:
         f"<td>{location}</td>"
         f"<td>{role}</td>"
         f"<td>{source}</td>"
-        "</tr>"
-    )
-
-
-def _render_linkedin_row(job: DashboardJob) -> str:
-    company = escape(job.company)
-    title = escape(job.title)
-    location = escape(job.location)
-    role = escape(job.role)
-    url = escape(job.url, quote=True)
-    return (
-        "<tr>"
-        f"<td>{company}</td>"
-        f'<td><a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a></td>'
-        f"<td>{location}</td>"
-        f"<td>{role}</td>"
         "</tr>"
     )
 
