@@ -9,10 +9,11 @@ DEFAULT_ROLE_QUERIES = (
     "agentic ai engineer",
     "data scientist",
     "applied scientist",
-    "software engineer new grad",
-    "software engineer university graduate",
-    "software development engineer entry level",
-    "sde new grad",
+    "software engineer",
+    "software development engineer",
+    "backend engineer",
+    "full stack engineer",
+    "founding engineer",
     "forward deployed software engineer",
 )
 

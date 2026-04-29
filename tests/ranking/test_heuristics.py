@@ -79,6 +79,7 @@ def test_role_category_handles_target_role_variations() -> None:
     assert role_category("Backend Platform Engineer") == "Infrastructure"
     assert role_category("Data Scientist") == "Data Science"
     assert role_category("Fullstack Engineer") == "SWE/SDE"
+    assert role_category("Founding Engineer") == "Founding"
     assert role_category("Autonomy Engineer, Computer Vision") == "Engineering"
     assert role_category("CUDA Kernel Engineer") == "Engineering"
 
@@ -109,6 +110,9 @@ def test_is_target_role_keeps_relevant_technical_roles_and_drops_noise() -> None
     assert is_target_role(make_job("Software Development Engineer", "Seattle"))
     assert is_target_role(make_job("Data Scientist", "Chicago"))
     assert is_target_role(make_job("Forward Deployed Software Engineer", "Denver"))
+    assert is_target_role(make_job("Founding Engineer", "New York"))
+    assert is_target_role(make_job("Backend Engineer", "Austin"))
+    assert is_target_role(make_job("Full Stack Engineer", "Seattle"))
     assert is_target_role(make_job("Autonomy Engineer, Computer Vision", "Seattle"))
     assert is_target_role(make_job("CUDA Kernel Engineer", "Boston"))
     assert not is_target_role(make_job("Recruiter", "Seattle"))

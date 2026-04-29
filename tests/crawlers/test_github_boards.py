@@ -102,3 +102,13 @@ def test_parse_html_board_skips_rows_without_real_locations() -> None:
 """
 
     assert parse_html_board(html, board=board) == []
+
+
+def test_default_boards_include_swe_data_and_simplify_sources() -> None:
+    from job_crawler.crawlers.github_boards import DEFAULT_GITHUB_JOB_BOARDS
+
+    names = {board.name for board in DEFAULT_GITHUB_JOB_BOARDS}
+
+    assert "jobright_swe_new_grad_2026" in names
+    assert "jobright_data_analysis_new_grad_2026" in names
+    assert "simplify_new_grad_positions" in names

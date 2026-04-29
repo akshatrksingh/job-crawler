@@ -81,6 +81,10 @@ ROLE_KEYWORDS = (
     "software development engineer",
     "full stack",
     "full-stack",
+    "fullstack",
+    "founding engineer",
+    "founding ai engineer",
+    "founding machine learning engineer",
     "platform engineer",
     "backend",
     "back end",
@@ -104,6 +108,9 @@ TARGET_TITLE_KEYWORDS = (
     "artificial intelligence",
     "software engineer",
     "software development engineer",
+    "founding engineer",
+    "founding ai engineer",
+    "founding machine learning engineer",
     "swe",
     "sde",
     "fullstack",
@@ -184,6 +191,7 @@ SOURCE_FILTER_OPTIONS = (
     "google_jobs",
     "github_jobs",
     "jobright_swe_new_grad_2026",
+    "jobright_data_analysis_new_grad_2026",
     "simplify_new_grad_positions",
 )
 
@@ -462,6 +470,8 @@ def role_category(title: str) -> str:
     value = title.lower()
     if "machine learning" in value or "ml" in value:
         return "ML"
+    if "founding" in value:
+        return "Founding"
     if "ai" in value or "artificial intelligence" in value or "agent" in value:
         return "AI"
     if "data scientist" in value or "data science" in value:

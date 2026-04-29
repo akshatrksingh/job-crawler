@@ -43,6 +43,15 @@ DEFAULT_GITHUB_JOB_BOARDS = (
         description="Jobright 2026 SWE new-grad board",
     ),
     GitHubJobBoard(
+        name="jobright_data_analysis_new_grad_2026",
+        url=(
+            "https://raw.githubusercontent.com/"
+            "jobright-ai/2026-Data-Analysis-New-Grad/master/README.md"
+        ),
+        format="markdown",
+        description="Jobright 2026 data-analysis new-grad board",
+    ),
+    GitHubJobBoard(
         name="simplify_new_grad_positions",
         url="https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/README.md",
         format="html",
