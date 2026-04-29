@@ -1,0 +1,302 @@
+# Development Stages
+
+This file tracks the incremental build plan. Each stage should end with a small
+test and a user-run commit/push.
+
+## Stage 0: Project Scaffold
+
+Status: Done.
+
+Built:
+
+- Python package skeleton.
+- Local data and digest directories.
+- Basic README, `.env.example`, and `pyproject.toml`.
+- Private GitHub repo setup.
+
+Test before push:
+
+```bash
+git status
+```
+
+Suggested commit:
+
+```bash
+git add .
+git commit -m "chore: create initial project scaffold"
+git push
+```
+
+## Stage 1: Operating Docs
+
+Status: In progress.
+
+Goal:
+
+- Make project decisions, strict instructions, and stage flow explicit.
+- Remove Indeed from scope.
+
+Test before push:
+
+```bash
+git diff -- README.md pyproject.toml docs/decisions.md docs/instructions.md docs/development-stages.md
+```
+
+Suggested commit:
+
+```bash
+git add README.md pyproject.toml docs/decisions.md docs/instructions.md docs/development-stages.md
+git commit -m "docs: define crawler development workflow"
+git push
+```
+
+## Stage 2: SQLite Schema and Dedupe
+
+Status: Planned.
+
+Goal:
+
+- Add SQLite schema creation.
+- Add job, source, crawl run, and score tables.
+- Add idempotent insert/dedupe behavior.
+
+End-to-end test:
+
+- Insert fixture jobs from two fake sources.
+- Confirm duplicate inserts do not create duplicate job rows.
+- Confirm new jobs can be selected for scoring.
+
+Push after:
+
+- Unit tests pass for schema and dedupe.
+- A local smoke script creates a SQLite DB in `data/`.
+
+Suggested commit:
+
+```bash
+git add src/job_crawler/storage tests
+git commit -m "feat(storage): add sqlite schema and dedupe"
+git push
+```
+
+## Stage 3: Career Page API Crawlers
+
+Status: Planned.
+
+Goal:
+
+- Implement Ashby, Greenhouse, and Lever API crawlers.
+- Normalize jobs into the shared `JobPosting` shape.
+
+End-to-end test:
+
+- Use fixture API responses for parser tests.
+- Run one live smoke crawl for a user-approved sample company per source.
+- Store results in SQLite without duplicates.
+
+Push after:
+
+- Parser tests pass.
+- Live smoke output looks reasonable.
+
+Suggested commit:
+
+```bash
+git add src/job_crawler/crawlers tests
+git commit -m "feat(crawlers): add startup ats crawlers"
+git push
+```
+
+## Stage 4: Dynamic Company Discovery
+
+Status: Planned.
+
+Goal:
+
+- Discover Ashby, Greenhouse, and Lever slugs from search queries.
+- Store discovered slugs and provenance.
+
+End-to-end test:
+
+- Run a limited query set.
+- Confirm slugs are extracted, deduped, and tied back to their source query.
+
+Push after:
+
+- URL extraction tests pass.
+- One live discovery smoke run succeeds or documented manual-search fallback is
+  accepted.
+
+Suggested commit:
+
+```bash
+git add src/job_crawler/discovery tests
+git commit -m "feat(discovery): add dynamic ats source discovery"
+git push
+```
+
+## Stage 5: HN and YC Sources
+
+Status: Planned.
+
+Goal:
+
+- Crawl Hacker News Who is Hiring through Algolia.
+- Crawl YC Work at a Startup.
+
+End-to-end test:
+
+- Fetch current/recent HN thread metadata.
+- Extract job-like posts into normalized records.
+- Fetch or parse YC roles into normalized records.
+
+Push after:
+
+- Fixture tests pass.
+- Live smoke run stores new jobs without duplicates.
+
+Suggested commit:
+
+```bash
+git add src/job_crawler/crawlers tests
+git commit -m "feat(crawlers): add hn and yc sources"
+git push
+```
+
+## Stage 6: Google Jobs via JobSpy
+
+Status: Planned.
+
+Goal:
+
+- Add Google Jobs search through `python-jobspy`.
+- Keep Indeed disabled/out of scope.
+
+End-to-end test:
+
+- Run a small Google Jobs search for one target role/location.
+- Normalize and dedupe results into SQLite.
+
+Push after:
+
+- Adapter tests pass.
+- Smoke run returns plausible Google Jobs records.
+
+Suggested commit:
+
+```bash
+git add src/job_crawler/crawlers tests pyproject.toml
+git commit -m "feat(crawlers): add google jobs adapter"
+git push
+```
+
+## Stage 7: Resume Scoring
+
+Status: Planned.
+
+Goal:
+
+- Load resume from `JOB_CRAWLER_RESUME_PATH`.
+- Score unscored jobs with GPT-4o-mini.
+- Store score, reason, model, and timestamp.
+
+End-to-end test:
+
+- Use a fake scorer in tests.
+- Run one user-approved live scoring smoke test with a small job batch.
+
+Push after:
+
+- Prompt construction and response parsing tests pass.
+- Live smoke scoring succeeds.
+
+Suggested commit:
+
+```bash
+git add src/job_crawler/scoring tests .env.example
+git commit -m "feat(scoring): score jobs against resume"
+git push
+```
+
+## Stage 8: Daily Digest
+
+Status: Planned.
+
+Goal:
+
+- Generate `digests/YYYY-MM-DD.md`.
+- Include only jobs with score `>= JOB_CRAWLER_MIN_SCORE`.
+
+End-to-end test:
+
+- Seed scored fixture jobs.
+- Generate a digest.
+- Confirm low-scoring jobs are excluded and high-scoring jobs are present.
+
+Push after:
+
+- Digest tests pass.
+- Local generated digest looks clean.
+
+Suggested commit:
+
+```bash
+git add src/job_crawler/digest tests
+git commit -m "feat(digest): generate daily markdown digest"
+git push
+```
+
+## Stage 9: Daily Runner
+
+Status: Planned.
+
+Goal:
+
+- Add a single command that runs discovery, crawling, scoring, and digest
+  generation.
+- Add clear docs for local scheduling.
+
+End-to-end test:
+
+- Run a small dry-run mode.
+- Run the full pipeline with low limits.
+- Confirm rerun remains idempotent.
+
+Push after:
+
+- CLI tests pass.
+- Dry run and limited live run succeed.
+
+Suggested commit:
+
+```bash
+git add src/job_crawler scripts README.md tests
+git commit -m "feat(cli): add daily crawler runner"
+git push
+```
+
+## Stage 10: Scheduling
+
+Status: Planned.
+
+Goal:
+
+- Add user-approved scheduling, likely local `launchd` on macOS or GitHub
+  Actions if secrets/storage decisions make sense.
+
+Decision needed:
+
+- Where should daily execution live: local laptop, server, or GitHub Actions?
+
+Push after:
+
+- The chosen schedule can run the command and place the digest where expected.
+
+Suggested commit:
+
+```bash
+git add scripts docs README.md
+git commit -m "docs(ops): document daily scheduling"
+git push
+```
