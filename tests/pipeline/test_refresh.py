@@ -113,7 +113,7 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         )
 
     def fake_ashby_fetcher(slug: str, company: str, limit: int):
-        assert slug in {"example-company", "discovered-ai"}
+        assert slug in {"board-co", "discovered-ai", "example-company"}
         assert company == slug
         assert limit == 3
         return [
@@ -135,8 +135,8 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         return [make_job("greenhouse", "1", "Software Engineer")]
 
     def fake_lever_fetcher(site: str, company: str, limit: int):
-        assert site == "example-lever"
-        assert company == "example-lever"
+        assert site in {"example-lever", "hn-ai"}
+        assert company == site
         assert limit == 3
         return [make_job("lever", "1", "Machine Learning Engineer")]
 
@@ -160,7 +160,17 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
 
     def fake_hn_fetcher(limit: int):
         assert limit == 6
-        return [make_job("hn", "1", "Applied AI Engineer")]
+        return [
+            JobPosting(
+                source="hn",
+                source_id="1",
+                company="HN Co",
+                title="Applied AI Engineer",
+                location="New York, NY",
+                url="https://jobs.lever.co/hn-ai/job-1",
+                description="Entry level AI role.",
+            )
+        ]
 
     def fake_web_discovery_fetcher(max_queries: int, results_per_query: int):
         assert max_queries == 2
@@ -193,21 +203,86 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         web_discovery_fetcher=fake_web_discovery_fetcher,
     )
 
-    assert result.seen == 8
-    assert result.inserted == 8
+    assert result.seen == 10
+    assert result.inserted == 9
     assert [source.source for source in result.sources] == [
         "web_search_discovery",
+        "github_jobs:default_boards",
+        "hn",
+        "yc",
+        "ashby:board-co",
         "ashby:discovered-ai",
         "ashby:example-company",
         "greenhouse:example-gh",
         "lever:example-lever",
-        "github_jobs:default_boards",
-        "hn",
-        "yc",
+        "lever:hn-ai",
     ]
     assert output_path.exists()
     assert "AI Engineer" in output_path.read_text(encoding="utf-8")
     with open_database(db_path) as connection:
-        slugs = [row["slug"] for row in JobRepository(connection).list_sources(source_type="ashby")]
-    assert "board-co" in slugs
-    assert "discovered-ai" in slugs
+        repo = JobRepository(connection)
+        ashby_slugs = [row["slug"] for row in repo.list_sources(source_type="ashby")]
+        lever_slugs = [row["slug"] for row in repo.list_sources(source_type="lever")]
+        query_budget = repo.get_app_state("web_discovery_query_budget")
+    assert "board-co" in ashby_slugs
+    assert "discovered-ai" in ashby_slugs
+    assert "hn-ai" in lever_slugs
+    assert query_budget == "2"
+
+
+def test_refresh_jobs_backs_off_web_discovery_query_budget_on_error(tmp_path) -> None:
+    db_path = tmp_path / "jobs.sqlite"
+    output_path = tmp_path / "site" / "index.html"
+    with open_database(db_path) as connection:
+        JobRepository(connection).set_app_state("web_discovery_query_budget", "40")
+
+    def failing_web_discovery_fetcher(max_queries: int, results_per_query: int):
+        assert max_queries == 40
+        assert results_per_query == 3
+        raise RuntimeError("tavily unavailable")
+
+    result = refresh_jobs(
+        db_path=db_path,
+        output_path=output_path,
+        github_jobs_limit=1,
+        hn_limit=1,
+        yc_limit=1,
+        web_discovery_queries=99,
+        web_discovery_results_per_query=3,
+        max_sources=0,
+        github_boards_fetcher=lambda limit: [],
+        hn_fetcher=lambda limit: [],
+        yc_fetcher=lambda limit: [],
+        web_discovery_fetcher=failing_web_discovery_fetcher,
+    )
+
+    assert result.errors == ["tavily unavailable"]
+    with open_database(db_path) as connection:
+        repo = JobRepository(connection)
+        assert repo.get_app_state("web_discovery_query_budget") == "30"
+
+
+def test_refresh_jobs_never_backs_off_web_discovery_below_ten(tmp_path) -> None:
+    db_path = tmp_path / "jobs.sqlite"
+    output_path = tmp_path / "site" / "index.html"
+    with open_database(db_path) as connection:
+        JobRepository(connection).set_app_state("web_discovery_query_budget", "10")
+
+    result = refresh_jobs(
+        db_path=db_path,
+        output_path=output_path,
+        github_jobs_limit=1,
+        hn_limit=1,
+        yc_limit=1,
+        web_discovery_queries=99,
+        max_sources=0,
+        github_boards_fetcher=lambda limit: [],
+        hn_fetcher=lambda limit: [],
+        yc_fetcher=lambda limit: [],
+        web_discovery_fetcher=lambda max_queries, results_per_query: [],
+    )
+
+    assert result.errors == []
+    with open_database(db_path) as connection:
+        repo = JobRepository(connection)
+        assert repo.get_app_state("web_discovery_query_budget") == "10"

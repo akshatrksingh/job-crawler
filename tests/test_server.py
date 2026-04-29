@@ -4,23 +4,26 @@ from job_crawler.server import DashboardServerConfig, _build_handler, _is_author
 
 
 def test_dashboard_handler_can_be_constructed() -> None:
+    config = DashboardServerConfig(
+        db_path=Path("data/job_crawler.sqlite"),
+        output_path=Path("site/index.html"),
+        days=14,
+        candidate_limit=100,
+        ashby_limit=10,
+        github_jobs_limit=25,
+        hn_limit=10,
+        yc_limit=10,
+        cooldown_hours=6,
+        auth_username=None,
+        auth_password=None,
+    )
     handler = _build_handler(
-        DashboardServerConfig(
-            db_path=Path("data/job_crawler.sqlite"),
-            output_path=Path("site/index.html"),
-            days=14,
-            candidate_limit=100,
-            ashby_limit=10,
-            github_jobs_limit=25,
-            hn_limit=10,
-            yc_limit=10,
-            cooldown_hours=6,
-            auth_username=None,
-            auth_password=None,
-        )
+        config
     )
 
     assert handler.__name__ == "DashboardRequestHandler"
+    assert config.refresh_lock.acquire(blocking=False)
+    config.refresh_lock.release()
 
 
 def test_basic_auth_helper_is_opt_in_and_checks_credentials() -> None:

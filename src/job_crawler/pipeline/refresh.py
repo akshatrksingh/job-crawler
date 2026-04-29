@@ -60,6 +60,9 @@ class RefreshResult:
 
 
 REFRESH_STATE_KEY = "last_refresh_at"
+WEB_DISCOVERY_QUERY_BUDGET_KEY = "web_discovery_query_budget"
+WEB_DISCOVERY_MIN_QUERY_BUDGET = 10
+WEB_DISCOVERY_BACKOFF_STEP = 10
 
 
 def refresh_yc(
@@ -123,13 +126,13 @@ def refresh_jobs(
     output_path: Path,
     days: int = 14,
     candidate_limit: int = 10_000,
-    ashby_limit: int = 100,
+    ashby_limit: int = 10,
     github_jobs_limit: int = 250,
     hn_limit: int = 80,
     yc_limit: int = 80,
-    web_discovery_queries: int = 20,
+    web_discovery_queries: int = 100,
     web_discovery_results_per_query: int = 8,
-    max_sources: int = 50,
+    max_sources: int = 500,
     ashby_fetcher: SourceFetcher = fetch_ashby_jobs,
     greenhouse_fetcher: SourceFetcher = fetch_greenhouse_jobs,
     lever_fetcher: SourceFetcher = fetch_lever_jobs,
@@ -166,31 +169,23 @@ def refresh_jobs(
                     cooldown_seconds_remaining=int((next_refresh_at - now).total_seconds()),
                 )
 
-        source_results.append(
-            _refresh_web_discovery(
-                repo,
-                max_queries=web_discovery_queries,
-                results_per_query=web_discovery_results_per_query,
-                fetcher=web_discovery_fetcher,
-            )
+        web_discovery_query_budget = _web_discovery_query_budget(
+            repo,
+            ceiling=web_discovery_queries,
         )
-        fetchers = {
-            "ashby": ashby_fetcher,
-            "greenhouse": greenhouse_fetcher,
-            "lever": lever_fetcher,
-        }
-        for source_type, fetcher in fetchers.items():
-            for source in repo.list_sources(source_type=source_type)[:max_sources]:
-                source_results.append(
-                    _refresh_stored_source(
-                        repo,
-                        source_type=source_type,
-                        source_id=int(source["id"]),
-                        slug=str(source["slug"]),
-                        limit=ashby_limit,
-                        fetcher=fetcher,
-                    )
-                )
+        web_discovery_result = _refresh_web_discovery(
+            repo,
+            max_queries=web_discovery_query_budget,
+            results_per_query=web_discovery_results_per_query,
+            fetcher=web_discovery_fetcher,
+        )
+        source_results.append(web_discovery_result)
+        _update_web_discovery_query_budget(
+            repo,
+            current=web_discovery_query_budget,
+            ceiling=web_discovery_queries,
+            result=web_discovery_result,
+        )
         source_results.append(
             _refresh_github_boards(
                 repo,
@@ -214,6 +209,23 @@ def refresh_jobs(
                 limit=yc_limit,
             )
         )
+        fetchers = {
+            "ashby": ashby_fetcher,
+            "greenhouse": greenhouse_fetcher,
+            "lever": lever_fetcher,
+        }
+        for source_type, fetcher in fetchers.items():
+            for source in repo.list_sources(source_type=source_type)[:max_sources]:
+                source_results.append(
+                    _refresh_stored_source(
+                        repo,
+                        source_type=source_type,
+                        source_id=int(source["id"]),
+                        slug=str(source["slug"]),
+                        limit=ashby_limit,
+                        fetcher=fetcher,
+                    )
+                )
         refreshed_at = datetime.now(UTC)
         next_refresh_at = refreshed_at + timedelta(hours=cooldown_hours)
         repo.set_app_state(REFRESH_STATE_KEY, refreshed_at.isoformat())
@@ -244,6 +256,7 @@ def _refresh_source(
         jobs_seen = len(jobs)
         for job in jobs:
             jobs_inserted += int(repo.insert_job(job).inserted)
+        _upsert_sources_from_jobs(repo, jobs, discovered_from=f"{source} job links")
         repo.finish_crawl_run(
             crawl_run_id=crawl_run_id,
             status="succeeded",
@@ -360,6 +373,52 @@ def _refresh_web_discovery(
 
 def _source_keys(repo: JobRepository) -> set[tuple[str, str]]:
     return {(str(row["source_type"]), str(row["slug"])) for row in repo.list_sources()}
+
+
+def _web_discovery_query_budget(repo: JobRepository, *, ceiling: int) -> int:
+    if ceiling <= 0:
+        return 0
+    floor = min(WEB_DISCOVERY_MIN_QUERY_BUDGET, ceiling)
+    raw_value = repo.get_app_state(WEB_DISCOVERY_QUERY_BUDGET_KEY)
+    if raw_value is None:
+        return ceiling
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        return ceiling
+    return min(max(parsed, floor), ceiling)
+
+
+def _update_web_discovery_query_budget(
+    repo: JobRepository,
+    *,
+    current: int,
+    ceiling: int,
+    result: SourceRefreshResult,
+) -> None:
+    if ceiling <= 0:
+        repo.set_app_state(WEB_DISCOVERY_QUERY_BUDGET_KEY, "0")
+        return
+    floor = min(WEB_DISCOVERY_MIN_QUERY_BUDGET, ceiling)
+    if result.error or result.seen == 0:
+        next_budget = max(floor, current - WEB_DISCOVERY_BACKOFF_STEP)
+    else:
+        next_budget = min(ceiling, current + WEB_DISCOVERY_BACKOFF_STEP)
+    repo.set_app_state(WEB_DISCOVERY_QUERY_BUDGET_KEY, str(next_budget))
+
+
+def _upsert_sources_from_jobs(
+    repo: JobRepository,
+    jobs: list[JobPosting],
+    *,
+    discovered_from: str,
+) -> None:
+    sources = extract_sources_from_urls(
+        [job.url for job in jobs],
+        discovered_from=discovered_from,
+    )
+    for source in sources:
+        repo.upsert_discovered_source(source)
 
 
 def _fetch_source_jobs(

@@ -16,6 +16,15 @@ The pipeline will:
 Optional future semantic filtering can use Groq. Put a Groq key in `.env` as
 `GROQ_API_KEY=...` only after the feature is implemented and explicitly enabled.
 
+Optional live web discovery can use Tavily. Put a Tavily key in `.env` as
+`TAVILY_API_KEY=...` to let refresh search for new Ashby, Greenhouse, and Lever
+company boards before crawling. Discovery runs about 100 bounded searches across
+AI, ML, SWE, data, founding/backend/full-stack role groups, early-career wording,
+and major US cities. The query budget backs off by 10 after discovery failures
+or empty runs, down to a floor of 10. Without that key, refresh stays zero-cost
+and uses the built-in job boards, HN, YC, stored ATS boards, and a DuckDuckGo
+HTML fallback.
+
 No auto-apply behavior belongs in this project.
 
 ## Project Layout

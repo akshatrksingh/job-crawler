@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hmac
 import json
+import threading
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -43,6 +44,7 @@ class DashboardServerConfig:
         self.cooldown_hours = cooldown_hours
         self.auth_username = auth_username
         self.auth_password = auth_password
+        self.refresh_lock = threading.Lock()
 
     @property
     def auth_enabled(self) -> bool:
@@ -58,7 +60,7 @@ def run_dashboard_server(
     output_path: Path = Path("site/index.html"),
     days: int = 14,
     candidate_limit: int = 10_000,
-    ashby_limit: int = 100,
+    ashby_limit: int = 10,
     github_jobs_limit: int = 250,
     hn_limit: int = 80,
     yc_limit: int = 80,
@@ -117,36 +119,53 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
             self.send_error(HTTPStatus.NOT_FOUND)
 
         def _handle_refresh(self) -> None:
-            result = refresh_jobs(
-                db_path=config.db_path,
-                output_path=config.output_path,
-                days=config.days,
-                candidate_limit=config.candidate_limit,
-                ashby_limit=config.ashby_limit,
-                github_jobs_limit=config.github_jobs_limit,
-                hn_limit=config.hn_limit,
-                yc_limit=config.yc_limit,
-                cooldown_hours=config.cooldown_hours,
-                force=True,
-            )
-            payload = {
-                "ok": not result.errors,
-                "message": (
-                    "Fetched stored ATS sources and refreshed dashboard."
-                    if result.refreshed
-                    else "Refresh cooldown active."
-                ),
-                "refreshed": result.refreshed,
-                "seen": result.seen,
-                "inserted": result.inserted,
-                "candidates": result.candidates,
-                "last_refresh_at": result.last_refresh_at,
-                "next_refresh_at": result.next_refresh_at,
-                "cooldown_seconds_remaining": result.cooldown_seconds_remaining,
-                "sources": [source.__dict__ for source in result.sources],
-                "errors": result.errors,
-            }
-            self._send_json(payload)
+            if not config.refresh_lock.acquire(blocking=False):
+                self._send_json(
+                    {
+                        "ok": False,
+                        "message": "Refresh is already running.",
+                        "refreshed": False,
+                        "seen": 0,
+                        "inserted": 0,
+                        "candidates": 0,
+                        "sources": [],
+                        "errors": ["Refresh is already running."],
+                    }
+                )
+                return
+            try:
+                result = refresh_jobs(
+                    db_path=config.db_path,
+                    output_path=config.output_path,
+                    days=config.days,
+                    candidate_limit=config.candidate_limit,
+                    ashby_limit=config.ashby_limit,
+                    github_jobs_limit=config.github_jobs_limit,
+                    hn_limit=config.hn_limit,
+                    yc_limit=config.yc_limit,
+                    cooldown_hours=config.cooldown_hours,
+                    force=True,
+                )
+                payload = {
+                    "ok": not result.errors,
+                    "message": (
+                        "Fetched stored ATS sources and refreshed dashboard."
+                        if result.refreshed
+                        else "Refresh cooldown active."
+                    ),
+                    "refreshed": result.refreshed,
+                    "seen": result.seen,
+                    "inserted": result.inserted,
+                    "candidates": result.candidates,
+                    "last_refresh_at": result.last_refresh_at,
+                    "next_refresh_at": result.next_refresh_at,
+                    "cooldown_seconds_remaining": result.cooldown_seconds_remaining,
+                    "sources": [source.__dict__ for source in result.sources],
+                    "errors": result.errors,
+                }
+                self._send_json(payload)
+            finally:
+                config.refresh_lock.release()
 
         def _read_json(self) -> dict[str, object]:
             length = int(self.headers.get("Content-Length", "0") or "0")

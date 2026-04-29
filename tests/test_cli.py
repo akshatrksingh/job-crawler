@@ -11,7 +11,7 @@ def test_serve_parser_defaults_to_localhost(monkeypatch, tmp_path) -> None:
     assert args.host == "127.0.0.1"
     assert args.port == 8765
     assert args.days == 14
-    assert args.ashby_limit == 100
+    assert args.ashby_limit == 10
     assert args.github_jobs_limit == 250
     assert args.hn_limit == 80
     assert args.yc_limit == 80
@@ -27,6 +27,12 @@ def test_serve_parser_accepts_basic_auth() -> None:
 
     assert args.auth_username == "akshat"
     assert args.auth_password == "secret"
+
+
+def test_serve_parser_accepts_ats_limit_alias() -> None:
+    args = build_parser().parse_args(["serve", "--ats-limit", "25"])
+
+    assert args.ashby_limit == 25
 
 
 def test_discovery_query_parser() -> None:

@@ -4,7 +4,11 @@ from job_crawler.discovery.pages import extract_sources_from_html, fetch_sources
 from job_crawler.discovery.queries import (
     DEFAULT_LOCATION_QUERIES,
     DEFAULT_ROLE_QUERIES,
+    DEFAULT_WEB_DISCOVERY_LOCATIONS,
     DEFAULT_WEB_DISCOVERY_QUERIES,
+    DEFAULT_WEB_DISCOVERY_QUERY_LIMIT,
+    DEFAULT_WEB_DISCOVERY_ROLES,
+    DEFAULT_WEB_DISCOVERY_SITES,
     SOURCE_SITE_QUERIES,
     build_discovery_queries,
 )
@@ -21,7 +25,11 @@ from job_crawler.discovery.web_search import (
 __all__ = [
     "DEFAULT_LOCATION_QUERIES",
     "DEFAULT_ROLE_QUERIES",
+    "DEFAULT_WEB_DISCOVERY_LOCATIONS",
     "DEFAULT_WEB_DISCOVERY_QUERIES",
+    "DEFAULT_WEB_DISCOVERY_QUERY_LIMIT",
+    "DEFAULT_WEB_DISCOVERY_ROLES",
+    "DEFAULT_WEB_DISCOVERY_SITES",
     "SOURCE_SITE_QUERIES",
     "DiscoveredSource",
     "build_discovery_queries",

@@ -114,27 +114,37 @@ git push
 
 ## Stage 4: Dynamic Company Discovery
 
-Status: Done for provider-neutral extraction. Live search provider decision is
-pending.
+Status: Done for provider-neutral extraction. Optional Tavily live search is
+available when `TAVILY_API_KEY` is configured.
 
 Goal:
 
 - Discover Ashby, Greenhouse, and Lever slugs from search queries.
 - Store discovered slugs and provenance.
-- Generate bounded Google-style search queries.
-- Extract ATS slugs from pasted/search-result URLs without live scraping.
+- Generate bounded ATS search queries across target role families.
+- Extract ATS slugs from live search results or pasted/search-result URLs.
+- Prefer optional Tavily live search over direct Google scraping.
+- Keep a zero-cost fallback through DuckDuckGo HTML and job-board-derived ATS
+  links.
+- Keep Tavily discovery around 100 targeted searches by default.
+- Back off the web-discovery query budget by 10 after failures or empty runs,
+  down to a floor of 10, and recover by 10 after successful discovery.
+- Keep individual ATS company-board crawls capped at 10 jobs by default.
 
 End-to-end test:
 
 - Generate a limited query set.
 - Confirm slugs are extracted, deduped, and tied back to their source query.
 - Run a no-network smoke test with representative URLs.
+- With `TAVILY_API_KEY` set, run one bounded refresh and confirm new discovered
+  Ashby, Greenhouse, or Lever sources are stored before ATS crawling.
 
 Push after:
 
-- URL extraction tests pass.
+- URL extraction and Tavily parser tests pass.
 - No-network discovery smoke run succeeds.
-- Live search provider is chosen separately with user approval.
+- A bounded refresh does not show Google 429 errors.
+- Refresh status shows source discovery before per-company ATS crawls.
 
 Suggested commit:
 

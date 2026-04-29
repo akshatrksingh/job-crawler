@@ -30,7 +30,14 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--output", type=Path, default=Path("site/index.html"))
     serve.add_argument("--days", type=int, default=14)
     serve.add_argument("--candidate-limit", type=int, default=10_000)
-    serve.add_argument("--ashby-limit", type=int, default=100)
+    serve.add_argument(
+        "--ashby-limit",
+        "--ats-limit",
+        dest="ashby_limit",
+        type=int,
+        default=10,
+        help="Maximum jobs to fetch per Ashby, Greenhouse, or Lever company board",
+    )
     serve.add_argument("--github-jobs-limit", type=int, default=250)
     serve.add_argument("--hn-limit", type=int, default=80)
     serve.add_argument("--yc-limit", type=int, default=80)

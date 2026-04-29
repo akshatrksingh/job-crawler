@@ -45,9 +45,23 @@ Discovery requirements:
   `site:jobs.ashbyhq.com machine learning engineer San Francisco`.
 - Store discovered source slugs in SQLite with enough metadata to audit where
   they came from.
-- Live Google search execution is not chosen yet. The first implementation
-  supports query generation and URL extraction without live scraping; choosing a
-  search API, browser workflow, or manual paste workflow needs user approval.
+- Live source discovery should prefer an explicit search API over direct Google
+  scraping.
+- Tavily is the approved optional live web discovery provider when
+  `TAVILY_API_KEY` is set. It should use bounded basic searches and only extract
+  supported ATS URLs.
+- Tavily discovery should run roughly 100 targeted searches per refresh by
+  default, spanning AI/ML/SWE/data/founding role groups, early-career wording,
+  broad US targeting, and major cities such as NYC, SF, Seattle, Boston, Austin,
+  Los Angeles, Chicago, Denver, Atlanta, and Washington DC.
+- Persist an adaptive Tavily/web-discovery query budget. Start near 100 queries,
+  back off by 10 after failures or empty discovery runs, never go below 10, and
+  recover upward by 10 after successful discovery.
+- Without a Tavily key, refresh must still work at $0 using stored ATS sources,
+  GitHub-maintained job boards, YC, HN, and a conservative DuckDuckGo HTML
+  fallback.
+- Large hardcoded company lists are allowed only as fallback seed data, not as
+  the primary discovery strategy.
 
 ## Rate Limits and Cost Control
 
@@ -57,13 +71,19 @@ Discovery requirements:
   the same endpoints unnecessarily.
 - Prefer incremental crawling and cached state over full recrawls.
 - Keep live-network smoke tests small and explicit.
-- Do not add paid APIs or LLM calls unless the user explicitly approves them.
+- Do not add paid APIs or LLM calls unless the user explicitly approves them and
+  provides the required key.
 - The default pipeline should cost $0 to run aside from normal local compute and
   internet usage.
 - Do not run Google Jobs live searches by default; they were removed because
   they repeatedly hit upstream 429 blocks and added noise without useful jobs.
 - Any increase to crawl frequency, query breadth, paid API usage, or scheduled
   execution needs user approval.
+- Cache discovered sources and inserted jobs so refresh does not reclassify or
+  recrawl more than needed.
+- Limit each individual Ashby, Greenhouse, or Lever company-board crawl to 10
+  jobs by default. Increase this only when deliberately inspecting a specific
+  company.
 
 ## Storage
 
@@ -222,13 +242,15 @@ later.
 Follow-up: Add scheduling only after the manual dashboard update flow works.
 
 Decision changed: Hacker News source.
-Previous plan: Include Hacker News Who is Hiring through Algolia.
-New plan: Remove HN from the active crawler pipeline and dashboard.
-Reason: User asked to remove HN.
-Impact: HN jobs already present in local SQLite are not deleted, but they are
-hidden from the dashboard and HN is no longer fetched.
-Temporary or permanent: Permanent unless the user asks to re-add HN later.
-Follow-up: Keep refresh focused on YC and later ATS sources.
+Previous plan: Remove HN from the active crawler pipeline and dashboard.
+New plan: Re-include HN Who is Hiring through Algolia.
+Reason: User later asked to include HN again as another broad source of early
+startup hiring leads.
+Impact: HN is fetched during refresh and can also contribute direct ATS links
+that become stored company sources.
+Temporary or permanent: Permanent unless the user removes HN again.
+Follow-up: Keep HN parsing bounded and rely on downstream relevance filters for
+noisy comments.
 
 Decision changed: Refresh cadence.
 Previous plan: Refresh could be clicked repeatedly while the server is running.
@@ -270,3 +292,46 @@ Temporary or permanent: Permanent unless a stable, compliant, free Google Jobs
 API path is found later.
 Follow-up: Prefer ATS APIs, GitHub boards, YC, HN Algolia, and company-source
 expansion.
+
+Decision changed: Dynamic source discovery.
+Previous plan: Rely on stored company sources plus direct Google-style searches,
+with a possible hardcoded company list to broaden coverage.
+New plan: Run source expansion before ATS crawling. Refresh first discovers ATS
+boards from bounded web search, GitHub job-board apply links, HN links, and YC
+links, then crawls stored Ashby, Greenhouse, and Lever boards. Optional Tavily
+search is used when `TAVILY_API_KEY` is configured; otherwise discovery stays on
+free sources and DuckDuckGo fallback.
+Reason: A static company list would miss new companies and direct Google
+scraping triggered 429 blocks. Tavily gives a cleaner opt-in search path without
+making the app depend on paid calls.
+Impact: New ATS companies can enter SQLite before the same refresh crawls ATS
+boards, and the source cap is raised so the app is not limited to the first few
+hundred discovered companies.
+Temporary or permanent: Permanent architecture direction; provider details can
+change.
+Follow-up: Add a curated seed list only if dynamic discovery still leaves major
+coverage gaps.
+
+Decision changed: Per-company crawl breadth.
+Previous plan: Fetch up to 100 jobs from each Ashby, Greenhouse, or Lever board.
+New plan: Fetch up to 10 jobs per ATS company board by default while keeping
+curated aggregate boards broader.
+Reason: Large companies can return hundreds of unrelated postings, creating DB
+noise and longer refreshes without improving the top dashboard results.
+Impact: Refresh is lighter and the database grows more slowly. Deep company
+inspection can still be done later with an explicit higher limit.
+Temporary or permanent: Permanent default.
+Follow-up: Add a company-specific "crawl more" control only if needed.
+
+Decision changed: Tavily/web-discovery backoff.
+Previous plan: Run the configured web-discovery query count every refresh.
+New plan: Persist an adaptive query budget in SQLite. Discovery starts near 100
+queries, drops by 10 after failures or empty runs until a floor of 10, and
+recovers by 10 after successful discovery.
+Reason: A flaky search connection can otherwise make refresh feel stuck and burn
+unnecessary search calls.
+Impact: Refresh becomes less aggressive after bad Tavily/network runs, while
+still preserving a minimum discovery path.
+Temporary or permanent: Permanent default.
+Follow-up: Surface the current query budget in the dashboard if it becomes useful
+for debugging.

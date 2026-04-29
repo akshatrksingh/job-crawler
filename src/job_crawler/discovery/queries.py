@@ -68,24 +68,52 @@ DEFAULT_WEB_DISCOVERY_ROLES = (
     "ai engineer",
     "applied ai engineer",
     "machine learning engineer",
-    "ml engineer",
     "llm engineer",
-    "generative ai engineer",
-    "research engineer",
-    "applied scientist",
+    "software engineer",
+    "software development engineer",
+    "backend engineer",
+    "full stack engineer",
+    "founding engineer",
     "data scientist",
-    "software engineer ai",
 )
 
-DEFAULT_WEB_DISCOVERY_QUERIES = tuple(
-    query
-    for role in DEFAULT_WEB_DISCOVERY_ROLES
-    for query in (
-        f'site:jobs.ashbyhq.com "{role}" "United States"',
-        f'site:boards.greenhouse.io "{role}" "United States"',
-        f'site:jobs.lever.co "{role}" "United States"',
-    )
+DEFAULT_WEB_DISCOVERY_LOCATIONS = (
+    "United States",
+    "New York",
+    "San Francisco",
+    "Seattle",
+    "Boston",
+    "Austin",
+    "Los Angeles",
+    "Chicago",
+    "Denver",
+    "Atlanta",
 )
+
+DEFAULT_WEB_DISCOVERY_SITES = (
+    "site:jobs.ashbyhq.com",
+    "site:boards.greenhouse.io",
+    "site:jobs.lever.co",
+)
+
+DEFAULT_WEB_DISCOVERY_QUERY_LIMIT = 100
+
+
+def _build_default_web_discovery_queries(
+    limit: int = DEFAULT_WEB_DISCOVERY_QUERY_LIMIT,
+) -> tuple[str, ...]:
+    queries: list[str] = []
+    for index in range(limit):
+        role = DEFAULT_WEB_DISCOVERY_ROLES[index % len(DEFAULT_WEB_DISCOVERY_ROLES)]
+        location = DEFAULT_WEB_DISCOVERY_LOCATIONS[
+            (index // len(DEFAULT_WEB_DISCOVERY_ROLES)) % len(DEFAULT_WEB_DISCOVERY_LOCATIONS)
+        ]
+        site_query = DEFAULT_WEB_DISCOVERY_SITES[index % len(DEFAULT_WEB_DISCOVERY_SITES)]
+        queries.append(f'{site_query} "{role}" "{location}"')
+    return tuple(queries)
+
+
+DEFAULT_WEB_DISCOVERY_QUERIES = _build_default_web_discovery_queries()
 
 
 def build_discovery_queries(
