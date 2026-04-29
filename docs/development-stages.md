@@ -114,28 +114,32 @@ git push
 
 ## Stage 4: Dynamic Company Discovery
 
-Status: Planned.
+Status: Done for provider-neutral extraction. Live search provider decision is
+pending.
 
 Goal:
 
 - Discover Ashby, Greenhouse, and Lever slugs from search queries.
 - Store discovered slugs and provenance.
+- Generate bounded Google-style search queries.
+- Extract ATS slugs from pasted/search-result URLs without live scraping.
 
 End-to-end test:
 
-- Run a limited query set.
+- Generate a limited query set.
 - Confirm slugs are extracted, deduped, and tied back to their source query.
+- Run a no-network smoke test with representative URLs.
 
 Push after:
 
 - URL extraction tests pass.
-- One live discovery smoke run succeeds or documented manual-search fallback is
-  accepted.
+- No-network discovery smoke run succeeds.
+- Live search provider is chosen separately with user approval.
 
 Suggested commit:
 
 ```bash
-git add src/job_crawler/discovery tests
+git add src/job_crawler/discovery src/job_crawler/storage/repository.py scripts/smoke_discovery_from_urls.py tests/discovery pyproject.toml docs/development-stages.md docs/decisions.md
 git commit -m "feat(discovery): add dynamic ats source discovery"
 git push
 ```

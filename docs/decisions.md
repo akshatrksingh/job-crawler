@@ -45,6 +45,9 @@ Discovery requirements:
   `site:jobs.ashbyhq.com machine learning engineer San Francisco`.
 - Store discovered source slugs in SQLite with enough metadata to audit where
   they came from.
+- Live Google search execution is not chosen yet. The first implementation
+  supports query generation and URL extraction without live scraping; choosing a
+  search API, browser workflow, or manual paste workflow needs user approval.
 
 ## Rate Limits and Cost Control
 
@@ -157,3 +160,15 @@ Impact: Scores remain internal for ranking/filtering but are not shown in the
 default digest.
 Temporary or permanent: Permanent unless the user asks for richer digest output.
 Follow-up: Keep digest renderer minimal in Stage 8.
+
+Decision changed: Dynamic discovery implementation sequence.
+Previous plan: Run live Google-style searches as part of Stage 4.
+New plan: First build provider-neutral query generation and URL extraction;
+choose any live search provider separately.
+Reason: Live search can trigger rate limits, brittle scraping behavior, or paid
+API usage.
+Impact: Discovery logic is testable now without network calls; live discovery
+needs one more approved integration decision.
+Temporary or permanent: Temporary sequencing decision.
+Follow-up: Ask user before adding SerpAPI, Google Custom Search, browser-based
+search, or another live search provider.

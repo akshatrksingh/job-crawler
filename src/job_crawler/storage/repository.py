@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from job_crawler.crawlers.base import JobPosting
+from job_crawler.discovery.sources import DiscoveredSource
 
 
 @dataclass(frozen=True)
@@ -111,6 +112,39 @@ class JobRepository:
             (next_crawl_after, source_id),
         )
         self.connection.commit()
+
+    def upsert_discovered_source(self, source: DiscoveredSource) -> int:
+        """Store a discovered source and preserve search provenance."""
+        return self.upsert_source(
+            source_type=source.source_type,
+            slug=source.slug,
+            base_url=source.base_url,
+            discovered_from=source.discovered_from,
+        )
+
+    def list_sources(self, *, source_type: str | None = None) -> list[sqlite3.Row]:
+        """List discovered sources for crawl planning."""
+        if source_type is None:
+            return list(
+                self.connection.execute(
+                    """
+                    SELECT *
+                    FROM sources
+                    ORDER BY source_type, slug
+                    """
+                )
+            )
+        return list(
+            self.connection.execute(
+                """
+                SELECT *
+                FROM sources
+                WHERE source_type = ?
+                ORDER BY slug
+                """,
+                (source_type,),
+            )
+        )
 
     def start_crawl_run(self, *, source_type: str, source_id: int | None = None) -> int:
         """Create a crawl run record and return its id."""

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from collections.abc import Callable
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from job_crawler.crawlers.ashby import fetch_ashby_jobs
 from job_crawler.crawlers.base import JobPosting
