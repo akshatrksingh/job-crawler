@@ -61,6 +61,8 @@ Discovery requirements:
 - Do not spend OpenAI credits on jobs that were already scored.
 - Batch or cap scoring work per run so a bad crawl cannot create an unexpected
   bill.
+- Keep Google Jobs live searches manual and tiny by default because `python-jobspy`
+  may scrape upstream pages and can hit rate limits if overused.
 - Any increase to crawl frequency, query breadth, scoring volume, or scheduled
   execution needs user approval.
 
