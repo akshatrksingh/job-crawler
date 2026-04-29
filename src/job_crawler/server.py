@@ -25,11 +25,9 @@ class DashboardServerConfig:
         days: int,
         candidate_limit: int,
         ashby_limit: int,
-        google_jobs_limit: int,
         github_jobs_limit: int,
         hn_limit: int,
         yc_limit: int,
-        max_google_queries: int,
         cooldown_hours: int,
         auth_username: str | None = None,
         auth_password: str | None = None,
@@ -39,11 +37,9 @@ class DashboardServerConfig:
         self.days = days
         self.candidate_limit = candidate_limit
         self.ashby_limit = ashby_limit
-        self.google_jobs_limit = google_jobs_limit
         self.github_jobs_limit = github_jobs_limit
         self.hn_limit = hn_limit
         self.yc_limit = yc_limit
-        self.max_google_queries = max_google_queries
         self.cooldown_hours = cooldown_hours
         self.auth_username = auth_username
         self.auth_password = auth_password
@@ -63,11 +59,9 @@ def run_dashboard_server(
     days: int = 14,
     candidate_limit: int = 10_000,
     ashby_limit: int = 100,
-    google_jobs_limit: int = 10,
     github_jobs_limit: int = 250,
     hn_limit: int = 80,
     yc_limit: int = 80,
-    max_google_queries: int = 20,
     cooldown_hours: int = 6,
     auth_username: str | None = None,
     auth_password: str | None = None,
@@ -79,11 +73,9 @@ def run_dashboard_server(
         days=days,
         candidate_limit=candidate_limit,
         ashby_limit=ashby_limit,
-        google_jobs_limit=google_jobs_limit,
         github_jobs_limit=github_jobs_limit,
         hn_limit=hn_limit,
         yc_limit=yc_limit,
-        max_google_queries=max_google_queries,
         cooldown_hours=cooldown_hours,
         auth_username=auth_username,
         auth_password=auth_password,
@@ -131,11 +123,9 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
                 days=config.days,
                 candidate_limit=config.candidate_limit,
                 ashby_limit=config.ashby_limit,
-                google_jobs_limit=config.google_jobs_limit,
                 github_jobs_limit=config.github_jobs_limit,
                 hn_limit=config.hn_limit,
                 yc_limit=config.yc_limit,
-                max_google_queries=config.max_google_queries,
                 cooldown_hours=config.cooldown_hours,
                 force=True,
             )

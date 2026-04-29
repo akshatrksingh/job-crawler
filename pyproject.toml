@@ -10,8 +10,6 @@ dependencies = [
   "pydantic-settings>=2.2.0",
   "python-dotenv>=1.0.1",
   "beautifulsoup4>=4.12.3",
-  # Imports as `jobspy`. Used for Google Jobs; Indeed is intentionally out of scope.
-  "python-jobspy>=1.1.70",
 ]
 
 [project.optional-dependencies]

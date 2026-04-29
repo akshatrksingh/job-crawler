@@ -172,31 +172,27 @@ git push
 
 ## Stage 6: Google Jobs via JobSpy
 
-Status: Done.
+Status: Removed.
 
 Goal:
 
-- Add Google Jobs search through `python-jobspy`.
-- Keep Indeed disabled/out of scope.
-- Keep live searches manual, tiny, and disabled unless the user runs the smoke
-  command.
+- This stage was implemented, then removed after live refreshes repeatedly hit
+  Google 429 / sorry pages.
+- Indeed remains disabled/out of scope.
 
 End-to-end test:
 
-- Run a small Google Jobs search for one target role/location.
-- Normalize and dedupe results into SQLite.
-- Offline adapter tests use fixture records only.
+- No active tests. Historical adapter code was removed.
 
 Push after:
 
-- Adapter tests pass.
-- Optional smoke run returns plausible Google Jobs records.
+- Removal tests pass.
 
 Suggested commit:
 
 ```bash
-git add src/job_crawler/crawlers scripts/smoke_google_jobs.py tests/crawlers docs/development-stages.md
-git commit -m "feat(crawlers): add google jobs adapter"
+git add pyproject.toml src/job_crawler tests docs/development-stages.md docs/decisions.md
+git commit -m "refactor(crawlers): remove google jobs source"
 git push
 ```
 

@@ -8,11 +8,6 @@ from job_crawler.crawlers.github_boards import (
     parse_html_board,
     parse_markdown_board,
 )
-from job_crawler.crawlers.google_jobs import (
-    build_default_google_job_queries,
-    fetch_google_jobs,
-    parse_jobspy_records,
-)
 from job_crawler.crawlers.greenhouse import fetch_greenhouse_jobs, parse_greenhouse_jobs
 from job_crawler.crawlers.hn import (
     fetch_hn_who_is_hiring_jobs,
@@ -26,7 +21,6 @@ from job_crawler.crawlers.yc import fetch_yc_jobs, parse_yc_jobs_html
 __all__ = [
     "fetch_ashby_jobs",
     "fetch_greenhouse_jobs",
-    "fetch_google_jobs",
     "fetch_default_github_board_jobs",
     "fetch_github_board_jobs",
     "fetch_hn_who_is_hiring_jobs",
@@ -38,10 +32,8 @@ __all__ = [
     "parse_hn_comment",
     "parse_hn_thread",
     "parse_html_board",
-    "parse_jobspy_records",
     "parse_lever_jobs",
     "parse_markdown_board",
     "parse_yc_jobs_html",
-    "build_default_google_job_queries",
     "DEFAULT_GITHUB_JOB_BOARDS",
 ]

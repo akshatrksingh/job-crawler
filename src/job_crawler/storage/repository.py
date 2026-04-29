@@ -374,11 +374,23 @@ class JobRepository:
             for row in rows
         ]
 
-    def list_recent_crawl_runs(self, *, limit: int = 25) -> list[sqlite3.Row]:
+    def list_recent_crawl_runs(
+        self,
+        *,
+        limit: int = 25,
+        excluded_source_types: tuple[str, ...] = ("google_jobs",),
+    ) -> list[sqlite3.Row]:
         """Return recent source refresh runs for dashboard diagnostics."""
+        where_clause = ""
+        params: list[object] = []
+        if excluded_source_types:
+            placeholders = ", ".join("?" for _ in excluded_source_types)
+            where_clause = f"WHERE crawl_runs.source_type NOT IN ({placeholders})"
+            params.extend(excluded_source_types)
+        params.append(limit)
         return list(
             self.connection.execute(
-                """
+                f"""
                 SELECT
                     crawl_runs.source_type,
                     sources.slug AS source_slug,
@@ -390,10 +402,11 @@ class JobRepository:
                     crawl_runs.error
                 FROM crawl_runs
                 LEFT JOIN sources ON sources.id = crawl_runs.source_id
+                {where_clause}
                 ORDER BY crawl_runs.started_at DESC, crawl_runs.id DESC
                 LIMIT ?
                 """,
-                (limit,),
+                params,
             )
         )
 

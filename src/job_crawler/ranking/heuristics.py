@@ -235,7 +235,6 @@ SOURCE_FILTER_OPTIONS = (
     "greenhouse",
     "lever",
     "yc",
-    "google_jobs",
     "github_jobs",
     "jobright_swe_new_grad_2026",
     "jobright_data_analysis_new_grad_2026",

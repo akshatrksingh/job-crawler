@@ -1,7 +1,10 @@
 from job_crawler.cli import build_parser
 
 
-def test_serve_parser_defaults_to_localhost() -> None:
+def test_serve_parser_defaults_to_localhost(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("JOB_CRAWLER_AUTH_USERNAME", raising=False)
+    monkeypatch.delenv("JOB_CRAWLER_AUTH_PASSWORD", raising=False)
     args = build_parser().parse_args(["serve"])
 
     assert args.command == "serve"
@@ -9,11 +12,9 @@ def test_serve_parser_defaults_to_localhost() -> None:
     assert args.port == 8765
     assert args.days == 14
     assert args.ashby_limit == 100
-    assert args.google_jobs_limit == 10
     assert args.github_jobs_limit == 250
     assert args.hn_limit == 80
     assert args.yc_limit == 80
-    assert args.max_google_queries == 20
     assert args.cooldown_hours == 6
     assert args.auth_username is None
     assert args.auth_password is None

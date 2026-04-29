@@ -140,12 +140,6 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         assert limit == 3
         return [make_job("lever", "1", "Machine Learning Engineer")]
 
-    def fake_google_fetcher(search_term: str, location: str, results_wanted: int):
-        assert search_term == "ai engineer"
-        assert location == "United States"
-        assert results_wanted == 2
-        return [make_job("google_jobs", "1", "AI Engineer")]
-
     def fake_github_boards_fetcher(limit: int):
         assert limit == 4
         return [
@@ -185,32 +179,28 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         db_path=db_path,
         output_path=output_path,
         ashby_limit=3,
-        google_jobs_limit=2,
         github_jobs_limit=4,
         hn_limit=6,
         yc_limit=5,
-        max_google_queries=1,
         web_discovery_queries=2,
         web_discovery_results_per_query=3,
         ashby_fetcher=fake_ashby_fetcher,
         greenhouse_fetcher=fake_greenhouse_fetcher,
         lever_fetcher=fake_lever_fetcher,
-        google_fetcher=fake_google_fetcher,
         github_boards_fetcher=fake_github_boards_fetcher,
         hn_fetcher=fake_hn_fetcher,
         yc_fetcher=fake_yc_fetcher,
         web_discovery_fetcher=fake_web_discovery_fetcher,
     )
 
-    assert result.seen == 9
-    assert result.inserted == 9
+    assert result.seen == 8
+    assert result.inserted == 8
     assert [source.source for source in result.sources] == [
         "web_search_discovery",
         "ashby:discovered-ai",
         "ashby:example-company",
         "greenhouse:example-gh",
         "lever:example-lever",
-        "google_jobs:ai engineer:United States",
         "github_jobs:default_boards",
         "hn",
         "yc",

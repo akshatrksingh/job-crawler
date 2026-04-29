@@ -34,7 +34,7 @@ Planned crawl sources:
 - Greenhouse startup career pages.
 - Lever startup career pages.
 - Ashby startup career pages.
-- Google Jobs through `python-jobspy`.
+- Hacker News Who is Hiring through the public Algolia API.
 - YC Work at a Startup board, using visible public pages unless a stable free API
   is identified and approved.
 
@@ -60,8 +60,8 @@ Discovery requirements:
 - Do not add paid APIs or LLM calls unless the user explicitly approves them.
 - The default pipeline should cost $0 to run aside from normal local compute and
   internet usage.
-- Keep Google Jobs live searches manual and tiny by default because `python-jobspy`
-  may scrape upstream pages and can hit rate limits if overused.
+- Do not run Google Jobs live searches by default; they were removed because
+  they repeatedly hit upstream 429 blocks and added noise without useful jobs.
 - Any increase to crawl frequency, query breadth, paid API usage, or scheduled
   execution needs user approval.
 
@@ -258,3 +258,15 @@ Impact: No Groq calls are made yet. If added, the key belongs in `.env` as
 Temporary or permanent: Planned optional enhancement.
 Follow-up: Add Groq only behind explicit opt-in and cache classifications so
 jobs are not reclassified repeatedly.
+
+Decision changed: Google Jobs source.
+Previous plan: Keep Google Jobs through `python-jobspy`.
+New plan: Remove Google Jobs from the active crawler and project dependency list.
+Reason: Live refreshes repeatedly hit Google 429 / sorry pages and produced noisy
+failure rows without useful job records.
+Impact: Refresh status is cleaner, fewer network calls are made, and the app no
+longer depends on `python-jobspy`.
+Temporary or permanent: Permanent unless a stable, compliant, free Google Jobs
+API path is found later.
+Follow-up: Prefer ATS APIs, GitHub boards, YC, HN Algolia, and company-source
+expansion.

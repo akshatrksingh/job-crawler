@@ -167,3 +167,27 @@ def test_list_recent_crawl_runs_includes_source_slug() -> None:
         assert runs[0]["source_type"] == "ashby"
         assert runs[0]["source_slug"] == "example-company"
         assert runs[0]["error"] == "network issue"
+
+
+def test_list_recent_crawl_runs_hides_removed_google_jobs_by_default() -> None:
+    with open_database(":memory:") as connection:
+        repo = JobRepository(connection)
+        google_run = repo.start_crawl_run(source_type="google_jobs")
+        repo.finish_crawl_run(
+            crawl_run_id=google_run,
+            status="failed",
+            jobs_seen=0,
+            jobs_inserted=0,
+            error="rate limited",
+        )
+        hn_run = repo.start_crawl_run(source_type="hn")
+        repo.finish_crawl_run(
+            crawl_run_id=hn_run,
+            status="succeeded",
+            jobs_seen=3,
+            jobs_inserted=2,
+        )
+
+        runs = repo.list_recent_crawl_runs()
+
+        assert [run["source_type"] for run in runs] == ["hn"]
