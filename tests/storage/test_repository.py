@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from job_crawler.crawlers.base import JobPosting
 from job_crawler.storage import JobRepository, canonicalize_url, open_database
 
@@ -99,24 +101,6 @@ def test_insert_job_replaces_github_board_url_when_direct_source_arrives() -> No
         assert row["url"] == "https://jobs.ashbyhq.com/example-company/ats-1"
 
 
-def test_unscored_jobs_excludes_existing_model_prompt_scores() -> None:
-    with open_database(":memory:") as connection:
-        repo = JobRepository(connection)
-        first = repo.insert_job(make_job(source_id="job_1", title="AI Engineer"))
-        repo.insert_job(make_job(source_id="job_2", title="Software Engineer"))
-
-        repo.insert_score(
-            job_id=first.job_id,
-            model="gpt-4o-mini",
-            score=8.0,
-            reason="Strong match",
-        )
-
-        unscored = repo.list_unscored_jobs(model="gpt-4o-mini")
-
-        assert [row["title"] for row in unscored] == ["Software Engineer"]
-
-
 def test_source_crawl_state_supports_rate_limit_friendly_reruns() -> None:
     with open_database(":memory:") as connection:
         repo = JobRepository(connection)
@@ -142,6 +126,88 @@ def test_source_crawl_state_supports_rate_limit_friendly_reruns() -> None:
         assert row["last_crawled_at"] is not None
         assert row["next_crawl_after"] == "2026-04-30T12:00:00"
         assert row["crawl_interval_seconds"] == 43_200
+
+
+def test_source_crawl_outcome_prioritizes_useful_sources() -> None:
+    with open_database(":memory:") as connection:
+        repo = JobRepository(connection)
+        useful_id = repo.upsert_source(source_type="ashby", slug="useful")
+        quiet_id = repo.upsert_source(source_type="ashby", slug="quiet")
+
+        repo.record_source_crawl_outcome(
+            source_id=useful_id,
+            jobs_seen=10,
+            jobs_inserted=3,
+            now=datetime(2026, 5, 4, tzinfo=UTC),
+        )
+        repo.record_source_crawl_outcome(
+            source_id=quiet_id,
+            jobs_seen=10,
+            jobs_inserted=0,
+            now=datetime(2026, 5, 4, tzinfo=UTC),
+        )
+
+        rows = connection.execute(
+            """
+            SELECT slug, usefulness_score, consecutive_empty_runs, next_crawl_after
+            FROM sources
+            ORDER BY usefulness_score DESC
+            """
+        ).fetchall()
+
+        assert [row["slug"] for row in rows] == ["useful", "quiet"]
+        assert rows[0]["consecutive_empty_runs"] == 0
+        assert rows[1]["consecutive_empty_runs"] == 1
+        assert rows[0]["next_crawl_after"] == "2026-05-05 00:00:00"
+        assert rows[1]["next_crawl_after"] == "2026-05-07 00:00:00"
+
+
+def test_list_due_sources_skips_sources_until_next_crawl_time() -> None:
+    with open_database(":memory:") as connection:
+        repo = JobRepository(connection)
+        due_id = repo.upsert_source(source_type="lever", slug="due")
+        later_id = repo.upsert_source(source_type="lever", slug="later")
+        repo.record_source_crawl_outcome(
+            source_id=due_id,
+            jobs_seen=0,
+            jobs_inserted=0,
+            now=datetime(2026, 4, 1, tzinfo=UTC),
+        )
+        repo.record_source_crawl_outcome(
+            source_id=later_id,
+            jobs_seen=0,
+            jobs_inserted=0,
+            now=datetime(2026, 5, 4, tzinfo=UTC),
+        )
+
+        due_sources = repo.list_due_sources(
+            source_type="lever",
+            limit=10,
+            now=datetime(2026, 5, 4, tzinfo=UTC),
+        )
+
+        assert [row["slug"] for row in due_sources] == ["due"]
+
+
+def test_cleanup_stale_crawl_runs_marks_abandoned_rows_failed() -> None:
+    with open_database(":memory:") as connection:
+        repo = JobRepository(connection)
+        run_id = repo.start_crawl_run(source_type="ashby")
+        connection.execute(
+            "UPDATE crawl_runs SET started_at = '2026-05-04 00:00:00' WHERE id = ?",
+            (run_id,),
+        )
+        connection.commit()
+
+        cleaned = repo.cleanup_stale_crawl_runs(stale_after_minutes=30)
+
+        row = connection.execute(
+            "SELECT status, error FROM crawl_runs WHERE id = ?",
+            (run_id,),
+        ).fetchone()
+        assert cleaned == 1
+        assert row["status"] == "failed"
+        assert "stale running crawl" in row["error"]
 
 
 def test_list_recent_crawl_runs_includes_source_slug() -> None:

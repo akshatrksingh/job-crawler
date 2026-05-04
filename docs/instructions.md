@@ -32,22 +32,25 @@ These are strict operating rules for this project.
 
 ## Coding Rules
 
-- Keep the pipeline modular: discovery, crawling, storage, ranking, and digest
-  generation should remain separable.
+- Keep the pipeline modular: discovery, crawling, storage, ranking, dashboard,
+  and refresh orchestration should remain separable.
 - Prefer typed Python and small functions with clear boundaries.
 - Keep network fetching separate from parsing and normalization.
 - Use structured APIs and JSON parsing rather than scraping when a source offers
   a public API.
 - Store data in SQLite through a narrow storage layer instead of scattering SQL
   across crawlers.
+- Keep personal-app state in SQLite by default. Do not add Redis or another
+  service unless the single-user SQLite path stops being enough.
 - Make dedupe idempotent: rerunning a stage should not create duplicate jobs.
 - Keep local secrets out of git. Use `.env` and document required variables in
   `.env.example`.
 - Do not add auto-apply behavior.
 - Do not add Indeed support unless the user explicitly re-adds it.
 - Protect against rate limits and accidental spend. Use conservative limits,
-  persisted crawl state, idempotent retries, and explicit user approval before
-  increasing crawl volume, schedule frequency, or paid API usage.
+  adaptive source scheduling, persisted crawl state, idempotent retries, and
+  explicit user approval before increasing crawl volume, schedule frequency, or
+  paid API usage.
 
 ## Testing Rules
 
@@ -62,8 +65,8 @@ These are strict operating rules for this project.
 
 - Do not add LLM/resume scoring unless the user explicitly re-adds it.
 - Keep default ranking cost-free and deterministic.
-- If Groq semantic filtering is added later, it must be optional, cached, and
-  disabled unless `GROQ_API_KEY` is configured.
+- If semantic filtering is added later, it must be optional, cached, and
+  disabled unless the user explicitly configures the chosen provider key.
 - Prioritize NYC and SF first, then other major US cities such as Seattle,
   Boston, Austin, Los Angeles, Chicago, Denver, Washington DC, and Atlanta.
 - Include Remote US roles.

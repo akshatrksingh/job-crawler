@@ -6,7 +6,7 @@ import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -52,8 +52,12 @@ def _to_iso(value: datetime | None) -> str | None:
     return value.isoformat()
 
 
+def _sqlite_datetime(value: datetime) -> str:
+    return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+
 class JobRepository:
-    """Persistence operations for sources, jobs, crawl runs, and scores."""
+    """Persistence operations for sources, jobs, crawl runs, and app state."""
 
     def __init__(self, connection: sqlite3.Connection) -> None:
         self.connection = connection
@@ -144,6 +148,36 @@ class JobRepository:
             )
         )
 
+    def list_due_sources(
+        self,
+        *,
+        source_type: str,
+        limit: int,
+        now: datetime | None = None,
+    ) -> list[sqlite3.Row]:
+        """List sources whose adaptive schedule says they are worth crawling now."""
+        now_sql = _sqlite_datetime(now or datetime.now(UTC))
+        return list(
+            self.connection.execute(
+                """
+                SELECT *
+                FROM sources
+                WHERE source_type = ?
+                  AND (
+                    next_crawl_after IS NULL
+                    OR datetime(next_crawl_after) <= datetime(?)
+                  )
+                ORDER BY
+                    usefulness_score DESC,
+                    last_crawled_at IS NULL DESC,
+                    last_crawled_at ASC,
+                    slug ASC
+                LIMIT ?
+                """,
+                (source_type, now_sql, limit),
+            )
+        )
+
     def start_crawl_run(self, *, source_type: str, source_id: int | None = None) -> int:
         """Create a crawl run record and return its id."""
         cursor = self.connection.execute(
@@ -177,6 +211,98 @@ class JobRepository:
             WHERE id = ?
             """,
             (status, jobs_seen, jobs_inserted, error, crawl_run_id),
+        )
+        self.connection.commit()
+
+    def cleanup_stale_crawl_runs(self, *, stale_after_minutes: int = 90) -> int:
+        """Mark abandoned running crawl rows as failed so the dashboard is honest."""
+        cutoff = _sqlite_datetime(datetime.now(UTC) - timedelta(minutes=stale_after_minutes))
+        cursor = self.connection.execute(
+            """
+            UPDATE crawl_runs
+            SET status = 'failed',
+                finished_at = datetime('now'),
+                error = 'stale running crawl cleaned up after process exit or interruption'
+            WHERE status = 'running'
+              AND datetime(started_at) <= datetime(?)
+            """,
+            (cutoff,),
+        )
+        self.connection.commit()
+        return int(cursor.rowcount)
+
+    def record_source_crawl_outcome(
+        self,
+        *,
+        source_id: int,
+        jobs_seen: int,
+        jobs_inserted: int,
+        error: str | None = None,
+        now: datetime | None = None,
+    ) -> None:
+        """Update source usefulness and next crawl time from the latest outcome."""
+        source = self.connection.execute(
+            """
+            SELECT usefulness_score, consecutive_empty_runs, consecutive_error_runs
+            FROM sources
+            WHERE id = ?
+            """,
+            (source_id,),
+        ).fetchone()
+        if source is None:
+            return
+
+        current_score = float(source["usefulness_score"])
+        empty_runs = int(source["consecutive_empty_runs"])
+        error_runs = int(source["consecutive_error_runs"])
+        crawl_time = now or datetime.now(UTC)
+
+        if error:
+            error_runs += 1
+            empty_runs = 0
+            is_not_found = "404" in error or "not found" in error.lower()
+            delay_days = 30 if is_not_found else min(14, 2 * error_runs)
+            score = max(0.0, current_score - (35 if delay_days == 30 else 18))
+        elif jobs_inserted > 0:
+            error_runs = 0
+            empty_runs = 0
+            delay_days = 1
+            score = min(100.0, current_score + 20 + min(jobs_inserted, 5) * 3)
+        elif jobs_seen > 0:
+            error_runs = 0
+            empty_runs += 1
+            delay_days = 3 if empty_runs == 1 else 7 if empty_runs == 2 else 14
+            score = max(5.0, current_score - 8)
+        else:
+            error_runs = 0
+            empty_runs += 1
+            delay_days = 7 if empty_runs <= 1 else 14
+            score = max(5.0, current_score - 14)
+
+        next_crawl_after = _sqlite_datetime(crawl_time + timedelta(days=delay_days))
+        self.connection.execute(
+            """
+            UPDATE sources
+            SET last_crawled_at = ?,
+                next_crawl_after = ?,
+                usefulness_score = ?,
+                consecutive_empty_runs = ?,
+                consecutive_error_runs = ?,
+                last_jobs_seen = ?,
+                last_jobs_inserted = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (
+                _sqlite_datetime(crawl_time),
+                next_crawl_after,
+                score,
+                empty_runs,
+                error_runs,
+                jobs_seen,
+                jobs_inserted,
+                source_id,
+            ),
         )
         self.connection.commit()
 
@@ -274,63 +400,13 @@ class JobRepository:
         ).fetchone()
         return int(row["id"]) if row else None
 
-    def insert_score(
-        self,
-        *,
-        job_id: int,
-        model: str,
-        score: float,
-        reason: str | None = None,
-        prompt_version: str = "v1",
-    ) -> int:
-        """Store a score once per job/model/prompt version."""
-        row = self.connection.execute(
-            """
-            INSERT INTO job_scores (job_id, model, score, reason, prompt_version)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(job_id, model, prompt_version) DO UPDATE SET
-                score = excluded.score,
-                reason = excluded.reason,
-                scored_at = datetime('now')
-            RETURNING id
-            """,
-            (job_id, model, score, reason, prompt_version),
-        ).fetchone()
-        self.connection.commit()
-        return int(row["id"])
-
-    def list_unscored_jobs(
-        self,
-        *,
-        model: str,
-        prompt_version: str = "v1",
-        limit: int = 25,
-    ) -> list[sqlite3.Row]:
-        """Return jobs without a score for the given scorer identity."""
-        return list(
-            self.connection.execute(
-                """
-                SELECT jobs.*
-                FROM jobs
-                LEFT JOIN job_scores
-                    ON job_scores.job_id = jobs.id
-                    AND job_scores.model = ?
-                    AND job_scores.prompt_version = ?
-                WHERE job_scores.id IS NULL
-                ORDER BY jobs.first_seen_at ASC
-                LIMIT ?
-                """,
-                (model, prompt_version, limit),
-            )
-        )
-
-    def list_jobs_for_digest(
+    def list_recent_jobs(
         self,
         *,
         limit: int = 250,
         excluded_sources: tuple[str, ...] = (),
     ) -> list[JobPosting]:
-        """Return recently seen jobs for zero-cost digest ranking."""
+        """Return recently seen jobs for dashboard filtering and ranking."""
         where_clause = ""
         params: list[object] = []
         if excluded_sources:
@@ -438,7 +514,7 @@ class JobRepository:
 
     def count_rows(self, table: str) -> int:
         """Count rows in a known project table."""
-        allowed_tables = {"sources", "crawl_runs", "jobs", "job_scores", "schema_migrations"}
+        allowed_tables = {"sources", "crawl_runs", "jobs", "app_state", "schema_migrations"}
         if table not in allowed_tables:
             msg = f"Unsupported table: {table}"
             raise ValueError(msg)

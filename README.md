@@ -9,12 +9,12 @@ The pipeline will:
 - Store jobs and crawl metadata in SQLite.
 - Deduplicate jobs so previously seen roles are not shown again.
 - Filter and rank jobs with zero-cost heuristics.
-- Produce a daily Markdown digest with a simple list of the best jobs.
 - Generate a private dashboard page showing recent fetched jobs and refresh errors.
-- Run locally or in Docker with SQLite on a persistent volume.
-
-Optional future semantic filtering can use Groq. Put a Groq key in `.env` as
-`GROQ_API_KEY=...` only after the feature is implemented and explicitly enabled.
+- Run as a laptop-hosted personal app with local SQLite.
+- Crawl stored ATS company boards with adaptive SQLite scheduling so quiet
+  companies are revisited less often and useful companies are revisited sooner.
+- Refresh ATS company boards in bounded parallel workers and show progress/ETA
+  while the refresh is running.
 
 Optional live web discovery can use Tavily. Put a Tavily key in `.env` as
 `TAVILY_API_KEY=...` to let refresh search for new Ashby, Greenhouse, and Lever
@@ -31,17 +31,16 @@ No auto-apply behavior belongs in this project.
 
 ```text
 src/job_crawler/
-  config/       Runtime settings and search targets
   crawlers/     Source-specific crawlers
   discovery/    Dynamic company/source discovery
-  digest/       Markdown daily digest generation
   dashboard/    Local private HTML dashboard generation
+  pipeline/     Refresh orchestration
   ranking/      Zero-cost job filtering and ranking
   storage/      SQLite schema, migrations, and repositories
 scripts/        Local operational scripts
 tests/          Unit and integration tests
 data/           Local SQLite DB and crawl artifacts, ignored by git
-digests/        Generated daily Markdown digests, ignored by git
+site/           Generated local dashboard HTML, ignored by git
 docs/           Design notes and decisions
 ```
 
@@ -53,14 +52,30 @@ PYTHONPATH=src uv run python -m job_crawler.cli serve --port 8782
 
 Open `http://127.0.0.1:8782/` and click Refresh.
 
+Useful knobs:
+
+```bash
+PYTHONPATH=src uv run python -m job_crawler.cli serve \
+  --port 8782 \
+  --ats-workers 8 \
+  --source-timeout-seconds 35
+```
+
 ## Deployment
 
-See `docs/deployment.md`. Deployed instances should set:
+See `docs/deployment.md`.
+
+The maintained target is **laptop-hosted**: run the dashboard on your machine,
+keep SQLite in `data/`, and optionally access it from your other devices through
+Tailscale. This is the strict `$0` path. Cloud deployment is optional/demo only
+unless you accept paying for durable storage.
+
+Internet-reachable instances, including temporary tunnels, should set:
 
 ```text
-JOB_CRAWLER_DB_PATH=/var/data/job_crawler.sqlite
 JOB_CRAWLER_AUTH_USERNAME=<your username>
 JOB_CRAWLER_AUTH_PASSWORD=<strong password>
+TAVILY_API_KEY=<optional Tavily key>
 ```
 
 SQLite must be on persistent disk if you want history to survive deploys.

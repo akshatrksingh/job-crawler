@@ -3,6 +3,7 @@ from job_crawler.cli import build_parser
 
 def test_serve_parser_defaults_to_localhost(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("JOB_CRAWLER_DB_PATH", raising=False)
     monkeypatch.delenv("JOB_CRAWLER_AUTH_USERNAME", raising=False)
     monkeypatch.delenv("JOB_CRAWLER_AUTH_PASSWORD", raising=False)
     args = build_parser().parse_args(["serve"])
@@ -15,9 +16,19 @@ def test_serve_parser_defaults_to_localhost(monkeypatch, tmp_path) -> None:
     assert args.github_jobs_limit == 250
     assert args.hn_limit == 80
     assert args.yc_limit == 80
-    assert args.cooldown_hours == 6
+    assert args.ats_workers == 8
+    assert args.source_timeout_seconds == 35.0
     assert args.auth_username is None
     assert args.auth_password is None
+
+
+def test_serve_parser_reads_db_path_from_env(monkeypatch, tmp_path) -> None:
+    db_path = tmp_path / "jobs.sqlite"
+    monkeypatch.setenv("JOB_CRAWLER_DB_PATH", str(db_path))
+
+    args = build_parser().parse_args(["serve"])
+
+    assert args.db == db_path
 
 
 def test_serve_parser_accepts_basic_auth() -> None:
@@ -33,6 +44,15 @@ def test_serve_parser_accepts_ats_limit_alias() -> None:
     args = build_parser().parse_args(["serve", "--ats-limit", "25"])
 
     assert args.ashby_limit == 25
+
+
+def test_serve_parser_accepts_parallel_refresh_options() -> None:
+    args = build_parser().parse_args(
+        ["serve", "--ats-workers", "3", "--source-timeout-seconds", "12.5"]
+    )
+
+    assert args.ats_workers == 3
+    assert args.source_timeout_seconds == 12.5
 
 
 def test_discovery_query_parser() -> None:

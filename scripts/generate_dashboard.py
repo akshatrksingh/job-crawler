@@ -25,7 +25,7 @@ def main() -> None:
     args = parse_args()
     with open_database(args.db) as connection:
         repo = JobRepository(connection)
-        jobs = repo.list_jobs_for_digest(limit=args.candidate_limit)
+        jobs = repo.list_recent_jobs(limit=args.candidate_limit)
         last_refresh_at = repo.get_app_state("last_refresh_at")
     path = write_dashboard(
         jobs,

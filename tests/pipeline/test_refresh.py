@@ -1,3 +1,4 @@
+import time
 from datetime import UTC, datetime, timedelta
 
 from job_crawler.crawlers.base import JobPosting
@@ -49,7 +50,7 @@ def test_refresh_yc_fetches_dedupes_and_writes_dashboard(tmp_path) -> None:
         assert JobRepository(connection).count_rows("jobs") == 1
 
 
-def test_refresh_yc_uses_six_hour_cooldown(tmp_path) -> None:
+def test_refresh_yc_can_run_again_immediately(tmp_path) -> None:
     db_path = tmp_path / "jobs.sqlite"
     output_path = tmp_path / "site" / "index.html"
     refresh_yc(
@@ -64,10 +65,9 @@ def test_refresh_yc_uses_six_hour_cooldown(tmp_path) -> None:
         yc_fetcher=lambda limit: [make_job("yc", "2", "AI Engineer")],
     )
 
-    assert second.refreshed is False
-    assert second.seen == 0
-    assert second.inserted == 0
-    assert second.cooldown_seconds_remaining > 0
+    assert second.refreshed is True
+    assert second.seen == 1
+    assert second.inserted == 1
 
 
 def test_refresh_yc_records_source_errors(tmp_path) -> None:
@@ -201,22 +201,25 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         hn_fetcher=fake_hn_fetcher,
         yc_fetcher=fake_yc_fetcher,
         web_discovery_fetcher=fake_web_discovery_fetcher,
+        ats_workers=1,
     )
 
     assert result.seen == 10
     assert result.inserted == 9
-    assert [source.source for source in result.sources] == [
+    assert [source.source for source in result.sources[:4]] == [
         "web_search_discovery",
         "github_jobs:default_boards",
         "hn",
         "yc",
+    ]
+    assert set(source.source for source in result.sources[4:]) == {
         "ashby:board-co",
         "ashby:discovered-ai",
         "ashby:example-company",
         "greenhouse:example-gh",
         "lever:example-lever",
         "lever:hn-ai",
-    ]
+    }
     assert output_path.exists()
     assert "AI Engineer" in output_path.read_text(encoding="utf-8")
     with open_database(db_path) as connection:
@@ -228,6 +231,79 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
     assert "discovered-ai" in ashby_slugs
     assert "hn-ai" in lever_slugs
     assert query_budget == "2"
+
+
+def test_refresh_jobs_only_fetches_due_ats_sources(tmp_path) -> None:
+    db_path = tmp_path / "jobs.sqlite"
+    output_path = tmp_path / "site" / "index.html"
+    with open_database(db_path) as connection:
+        repo = JobRepository(connection)
+        due_id = repo.upsert_source(source_type="ashby", slug="due-company")
+        later_id = repo.upsert_source(source_type="ashby", slug="later-company")
+        repo.record_source_crawl_outcome(
+            source_id=due_id,
+            jobs_seen=0,
+            jobs_inserted=0,
+            now=datetime(2026, 4, 1, tzinfo=UTC),
+        )
+        repo.record_source_crawl_outcome(
+            source_id=later_id,
+            jobs_seen=0,
+            jobs_inserted=0,
+            now=datetime.now(UTC),
+        )
+
+    called = []
+
+    def fake_ashby_fetcher(slug: str, company: str, limit: int):
+        called.append(slug)
+        return [make_job("ashby", slug, "AI Engineer")]
+
+    result = refresh_jobs(
+        db_path=db_path,
+        output_path=output_path,
+        max_sources=10,
+        github_boards_fetcher=lambda limit: [],
+        hn_fetcher=lambda limit: [],
+        yc_fetcher=lambda limit: [],
+        web_discovery_fetcher=lambda max_queries, results_per_query: [],
+        ashby_fetcher=fake_ashby_fetcher,
+    )
+
+    assert called == ["due-company"]
+    assert any(source.source == "ashby:due-company" for source in result.sources)
+    assert not any(source.source == "ashby:later-company" for source in result.sources)
+
+
+def test_refresh_jobs_records_timed_out_ats_source(tmp_path) -> None:
+    db_path = tmp_path / "jobs.sqlite"
+    output_path = tmp_path / "site" / "index.html"
+    with open_database(db_path) as connection:
+        JobRepository(connection).upsert_source(source_type="ashby", slug="slow-company")
+
+    def slow_ashby_fetcher(slug: str, company: str, limit: int):
+        time.sleep(0.05)
+        return [make_job("ashby", slug, "AI Engineer")]
+
+    result = refresh_jobs(
+        db_path=db_path,
+        output_path=output_path,
+        max_sources=1,
+        source_timeout_seconds=0.01,
+        github_boards_fetcher=lambda limit: [],
+        hn_fetcher=lambda limit: [],
+        yc_fetcher=lambda limit: [],
+        web_discovery_fetcher=lambda max_queries, results_per_query: [],
+        ashby_fetcher=slow_ashby_fetcher,
+    )
+
+    assert result.errors == ["timed out after 0s"]
+    with open_database(db_path) as connection:
+        run = connection.execute(
+            "SELECT status, error FROM crawl_runs WHERE source_type = 'ashby'"
+        ).fetchone()
+        assert run["status"] == "failed"
+        assert "timed out" in run["error"]
 
 
 def test_refresh_jobs_backs_off_web_discovery_query_budget_on_error(tmp_path) -> None:

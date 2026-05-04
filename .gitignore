@@ -15,6 +15,5 @@ data/*.sqlite-wal
 data/temp-db-*/
 data/raw/*
 data/processed/*
-digests/*.md
 site/*.html
 !.gitkeep

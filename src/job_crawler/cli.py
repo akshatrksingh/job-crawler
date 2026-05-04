@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve = subparsers.add_parser("serve", help="Serve the local private dashboard")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
-    serve.add_argument("--db", type=Path, default=Path("data/job_crawler.sqlite"))
+    serve.add_argument("--db", type=Path, default=_env_path("JOB_CRAWLER_DB_PATH"))
     serve.add_argument("--output", type=Path, default=Path("site/index.html"))
     serve.add_argument("--days", type=int, default=14)
     serve.add_argument("--candidate-limit", type=int, default=10_000)
@@ -41,7 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--github-jobs-limit", type=int, default=250)
     serve.add_argument("--hn-limit", type=int, default=80)
     serve.add_argument("--yc-limit", type=int, default=80)
-    serve.add_argument("--cooldown-hours", type=int, default=6)
+    serve.add_argument("--ats-workers", type=int, default=8)
+    serve.add_argument("--source-timeout-seconds", type=float, default=35.0)
     serve.add_argument("--auth-username", default=_env_value("JOB_CRAWLER_AUTH_USERNAME"))
     serve.add_argument("--auth-password", default=_env_value("JOB_CRAWLER_AUTH_PASSWORD"))
 
@@ -88,7 +89,8 @@ def main(argv: list[str] | None = None) -> None:
             github_jobs_limit=args.github_jobs_limit,
             hn_limit=args.hn_limit,
             yc_limit=args.yc_limit,
-            cooldown_hours=args.cooldown_hours,
+            ats_workers=args.ats_workers,
+            source_timeout_seconds=args.source_timeout_seconds,
             auth_username=args.auth_username,
             auth_password=args.auth_password,
         )
@@ -122,6 +124,10 @@ def _collect_urls(urls: list[str], file: Path | None) -> list[str]:
 
 def _env_value(name: str) -> str | None:
     return os.getenv(name) or None
+
+
+def _env_path(name: str, default: Path = Path("data/job_crawler.sqlite")) -> Path:
+    return Path(os.getenv(name) or default)
 
 
 def _store_discovered_sources(

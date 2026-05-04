@@ -10,7 +10,7 @@ Status: Done.
 Built:
 
 - Python package skeleton.
-- Local data and digest directories.
+- Local data and dashboard output directories.
 - Basic README, `.env.example`, and `pyproject.toml`.
 - Private GitHub repo setup.
 
@@ -36,7 +36,7 @@ Goal:
 
 - Make project decisions, strict instructions, and stage flow explicit.
 - Remove Indeed from scope.
-- Record rate-limit, cost-control, and simple-digest requirements.
+- Record rate-limit, cost-control, and simple-dashboard requirements.
 
 Test before push:
 
@@ -66,7 +66,7 @@ End-to-end test:
 
 - Insert fixture jobs from two fake sources.
 - Confirm duplicate inserts do not create duplicate job rows.
-- Confirm new jobs can be selected for downstream ranking/digest generation.
+- Confirm new jobs can be selected for downstream ranking/dashboard generation.
 - Confirm crawl state can record timestamps for rate-limit-friendly reruns.
 
 Push after:
@@ -234,35 +234,27 @@ git commit -m "feat(ranking): add zero-cost job ranking"
 git push
 ```
 
-## Stage 8: Daily Digest
+## Stage 8: Markdown Digest
 
-Status: Done.
+Status: Removed from maintained scope.
 
 Goal:
 
-- Generate `digests/YYYY-MM-DD.md`.
-- Include a simple list of company, job title, link, and location.
-- Use zero-cost ranking/top-N rather than a fixed score-only cutoff.
+- This stage was replaced by the local dashboard. Do not build or maintain the
+  Markdown digest path unless the user explicitly asks for exports later.
 
 End-to-end test:
 
-- Seed ranked fixture jobs.
-- Generate a digest.
-- Confirm strongest fixture jobs are present.
-- Confirm digest output does not include match summaries by default.
-- Confirm the SQLite repository can provide jobs for digest generation.
+- None for the removed path. Dashboard tests cover the current output surface.
 
 Push after:
 
-- Digest tests pass.
-- Local generated digest looks clean.
+- No push for this removed stage.
 
 Suggested commit:
 
 ```bash
-git add src/job_crawler/digest src/job_crawler/storage/repository.py scripts/generate_digest.py tests/digest docs/development-stages.md
-git commit -m "feat(digest): generate daily markdown digest"
-git push
+# No commit. This stage is intentionally removed.
 ```
 
 ## Stage 9: Local Dashboard
@@ -274,7 +266,7 @@ Goal:
 - Generate `site/index.html` from SQLite.
 - Show jobs from the last 14 days.
 - Keep older jobs stored but hidden from the dashboard view.
-- Provide search, location, and source filters.
+- Keep the page as a ready-made list without manual search/source/role filters.
 - Avoid a hard display limit.
 - Keep the dashboard local/private by default.
 
@@ -283,7 +275,7 @@ End-to-end test:
 - Seed fixture jobs inside and outside the 14-day window.
 - Confirm old jobs are hidden from the generated page.
 - Confirm senior roles are excluded.
-- Confirm filters exist in the generated HTML.
+- Confirm the generated HTML has no manual discovery/filter controls.
 - Generate the dashboard from the local SQLite DB.
 
 Push after:
@@ -299,56 +291,60 @@ git commit -m "feat(dashboard): generate local jobs page"
 git push
 ```
 
-## Stage 10: Daily Runner
+## Stage 10: Refresh Runner
 
-Status: Planned.
+Status: Done.
 
 Goal:
 
-- Add a single command that runs discovery, crawling, ranking, and digest
-  generation.
-- Add clear docs for local scheduling.
+- Keep the server refresh button as the primary runner.
+- Make refresh status clear when Tavily/web discovery fails or hits limits.
+- Run due ATS company-board crawls in bounded parallel workers.
+- Adapt each stored ATS source's next crawl time from recent usefulness.
+- Clean up stale running crawl rows left behind by interrupted refreshes.
+- Show refresh progress and an ETA while the browser waits.
+- Avoid automatic scheduling unless the user explicitly asks for it.
 
 End-to-end test:
 
-- Run a small dry-run mode.
 - Run the full pipeline with low limits.
-- Confirm rerun remains idempotent.
+- Confirm rerun remains idempotent and dashboard refresh errors are visible.
+- Confirm quiet sources are skipped until their next due time.
+- Confirm timed-out/stale source runs are marked failed.
+- Confirm the dashboard polls refresh progress.
 
 Push after:
 
 - CLI tests pass.
-- Dry run and limited live run succeed.
+- All 91 tests pass.
 
 Suggested commit:
 
 ```bash
-git add src/job_crawler scripts README.md tests
-git commit -m "feat(cli): add daily crawler runner"
+git add src/job_crawler scripts README.md tests docs
+git commit -m "feat(pipeline): refine dashboard refresh runner"
 git push
 ```
 
 ## Stage 11: Scheduling
 
-Status: Planned.
+Status: Deferred.
 
 Goal:
 
-- Add user-approved scheduling, likely local `launchd` on macOS or GitHub
-  Actions if secrets/storage decisions make sense.
+- Do not add scheduling by default. Manual refresh keeps compute and API usage
+  deliberate for the current personal `$0` setup.
 
 Decision needed:
 
-- Where should daily execution live: local laptop, server, or GitHub Actions?
+- Only revisit if the user asks for automatic refresh.
 
 Push after:
 
-- The chosen schedule can run the command and place the digest where expected.
+- No push until scheduling is explicitly requested.
 
 Suggested commit:
 
 ```bash
-git add scripts docs README.md
-git commit -m "docs(ops): document daily scheduling"
-git push
+# No commit. Scheduling is intentionally deferred.
 ```

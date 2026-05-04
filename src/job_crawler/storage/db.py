@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 SCHEMA_SQL = """
@@ -28,6 +28,11 @@ CREATE TABLE IF NOT EXISTS sources (
     last_crawled_at TEXT,
     next_crawl_after TEXT,
     crawl_interval_seconds INTEGER NOT NULL DEFAULT 86400,
+    usefulness_score REAL NOT NULL DEFAULT 50,
+    consecutive_empty_runs INTEGER NOT NULL DEFAULT 0,
+    consecutive_error_runs INTEGER NOT NULL DEFAULT 0,
+    last_jobs_seen INTEGER NOT NULL DEFAULT 0,
+    last_jobs_inserted INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (source_type, slug)
@@ -65,19 +70,6 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_first_seen_at ON jobs(first_seen_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_source ON jobs(source);
 
-CREATE TABLE IF NOT EXISTS job_scores (
-    id INTEGER PRIMARY KEY,
-    job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-    model TEXT NOT NULL,
-    score REAL NOT NULL CHECK (score >= 1 AND score <= 10),
-    reason TEXT,
-    scored_at TEXT NOT NULL DEFAULT (datetime('now')),
-    prompt_version TEXT NOT NULL DEFAULT 'v1',
-    UNIQUE (job_id, model, prompt_version)
-);
-
-CREATE INDEX IF NOT EXISTS idx_job_scores_score ON job_scores(score DESC);
-
 CREATE TABLE IF NOT EXISTS app_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
@@ -86,7 +78,16 @@ CREATE TABLE IF NOT EXISTS app_state (
 
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (1);
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (2);
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (3);
 """
+
+SOURCE_SCHEDULING_MIGRATIONS = (
+    "ALTER TABLE sources ADD COLUMN usefulness_score REAL NOT NULL DEFAULT 50",
+    "ALTER TABLE sources ADD COLUMN consecutive_empty_runs INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE sources ADD COLUMN consecutive_error_runs INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE sources ADD COLUMN last_jobs_seen INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE sources ADD COLUMN last_jobs_inserted INTEGER NOT NULL DEFAULT 0",
+)
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:
@@ -105,6 +106,12 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
 def initialize_database(connection: sqlite3.Connection) -> None:
     """Create all schema objects if they do not already exist."""
     connection.executescript(SCHEMA_SQL)
+    for statement in SOURCE_SCHEDULING_MIGRATIONS:
+        try:
+            connection.execute(statement)
+        except sqlite3.OperationalError as exc:
+            if "duplicate column name" not in str(exc).lower():
+                raise
     connection.commit()
 
 

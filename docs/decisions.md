@@ -9,11 +9,11 @@ grows.
 - The project is a personal job discovery pipeline.
 - The project must not auto-apply to jobs.
 - The project should find jobs, filter/rank them with zero-cost heuristics, and
-  create a daily Markdown digest.
-- The daily digest should be simple and scannable: company, job title, link, and
-  location are enough.
-- The digest should prioritize the best jobs from each run using deterministic
-  role, seniority, location, and recency heuristics.
+  show the results in a private local dashboard.
+- The dashboard list should be simple and scannable: company, job title, link,
+  and location are enough.
+- The dashboard should prioritize the best jobs from each run using
+  deterministic role, seniority, location, and recency heuristics.
 - The target roles are ML engineer, AI engineer, agentic AI engineer, applied AI
   roles, SWE roles, SDE roles, and closely related engineering roles.
 - The target seniority is new grad, entry level, junior, or roles expecting up to
@@ -84,13 +84,20 @@ Discovery requirements:
 - Limit each individual Ashby, Greenhouse, or Lever company-board crawl to 10
   jobs by default. Increase this only when deliberately inspecting a specific
   company.
+- Keep source crawl scheduling in SQLite. Redis is out of scope for the current
+  single-user laptop-hosted app.
+- Stored ATS sources should use adaptive `next_crawl_after` scheduling: sources
+  that produce new jobs are revisited sooner, quiet sources back off, and
+  failing/404 sources back off more aggressively.
+- Refresh may crawl due ATS company boards in bounded parallel workers, with
+  per-source timeouts and visible progress/ETA in the dashboard.
 
 ## Storage
 
 - SQLite is the source of truth.
 - Store raw crawl metadata where useful for debugging, but normalize job records
   into stable tables.
-- Deduplicate jobs before ranking or including them in a digest.
+- Deduplicate jobs before ranking or showing them on the dashboard.
 - The dedupe logic should prevent the same job from appearing again after it has
   already been seen.
 - Prefer stable source identifiers when available; otherwise derive a normalized
@@ -104,35 +111,28 @@ Discovery requirements:
   dedupe state.
 - Penalize or exclude senior, staff, principal, lead, manager, director, and
   architect roles by default.
-- Ranking is used to order the digest, not to make final application decisions.
-
-## Digest
-
-- Generate one clean Markdown file per day.
-- Prioritize the strongest jobs from the run with zero-cost ranking heuristics.
-- Each digest item should include only company, job title, direct job URL, and
-  location by default.
-- Internal rank metadata should stay out of the default digest unless the user
-  asks to show it.
-- Avoid repeated jobs across days unless a future decision explicitly allows
-  resurfacing.
+- Ranking is used to order the dashboard, not to make final application
+  decisions.
 
 ## Dashboard
 
 - Generate a local private HTML dashboard from SQLite.
 - The default dashboard path is `site/index.html`.
+- The maintained deployment target is laptop-hosted: run the local server on the
+  user's machine, keep SQLite in `data/`, and optionally access it privately
+  through Tailscale.
 - The dashboard should show jobs from the last 14 days, using posted date when
   available and fetched/current date otherwise.
 - Jobs older than the rolling window should be removed from view but remain in
   SQLite.
 - The dashboard should not impose a hard display limit.
 - The dashboard should show newest jobs first.
-- The dashboard should provide simple filters such as search, location, and
-  source.
 - The dashboard should not include filter controls by default. Jobs are fetched
   broadly across the US and ranked with major-city preference.
-- Do not publish the dashboard to the internet or add hosting/auth without user
-  approval.
+- The dashboard refresh button should start a background refresh and poll
+  progress so the user can see current phase, completed source count, and ETA.
+- Cloud hosting is optional/demo only unless the user explicitly accepts paid
+  durable storage. Internet-reachable access should require Basic Auth.
 
 ## Development Workflow
 
@@ -187,14 +187,15 @@ priority.
 Temporary or permanent: Permanent unless the user re-adds Indeed later.
 Follow-up: Remove any future Indeed code paths if they appear.
 
-Decision changed: Digest detail level.
-Previous plan: Include score and match reason in each digest item.
+Decision changed: Output detail level.
+Previous plan: Include score and match reason in each job item.
 New plan: Show only company, job title, link, and location by default.
 Reason: User wants a compact list without summaries or "why it matches" text.
 Impact: Scores remain internal for ranking/filtering but are not shown in the
-default digest.
-Temporary or permanent: Permanent unless the user asks for richer digest output.
-Follow-up: Keep digest renderer minimal in Stage 8.
+default dashboard.
+Temporary or permanent: Permanent unless the user asks for richer dashboard
+output.
+Follow-up: Keep dashboard rows minimal.
 
 Decision changed: Dynamic discovery implementation sequence.
 Previous plan: Run live Google-style searches as part of Stage 4.
@@ -213,8 +214,8 @@ Previous plan: Score jobs against the user's resume with GPT-4o-mini.
 New plan: Drop resume/GPT scoring from the current pipeline and use zero-cost
 heuristic filtering/ranking.
 Reason: User said resume scoring is not needed and wants costs to remain $0.
-Impact: No OpenAI API key or credits are needed for the planned pipeline. Digest
-ordering will be deterministic and simpler.
+Impact: No OpenAI API key or credits are needed for the planned pipeline.
+Dashboard ordering will be deterministic and simpler.
 Temporary or permanent: Permanent unless the user re-adds resume scoring later.
 Follow-up: Remove scoring-oriented stage planning and avoid paid model calls.
 
@@ -225,10 +226,11 @@ New plan: Prioritize NYC and SF first, then consider other major US cities and
 nearby metro areas such as Seattle, Boston, Austin, Los Angeles, Chicago, Denver,
 Washington DC, and Atlanta. Remote US remains in scope.
 Reason: User clarified that the search should not be only SF/NYC.
-Impact: Query generation, Google Jobs defaults, YC location parsing, and ranking
-heuristics should all include major US cities.
+Impact: Query generation, YC location parsing, and ranking heuristics should all
+include major US cities.
 Temporary or permanent: Permanent unless narrowed later.
-Follow-up: Keep digest ordering NYC/SF first, then other strong US-city matches.
+Follow-up: Keep dashboard ordering NYC/SF first, then other strong US-city
+matches.
 
 Decision changed: Daily output channel.
 Previous plan: Send one daily email digest.
@@ -254,12 +256,16 @@ noisy comments.
 
 Decision changed: Refresh cadence.
 Previous plan: Refresh could be clicked repeatedly while the server is running.
-New plan: Persist refresh time and disable refresh for 6 hours after a successful
-refresh.
-Reason: User wants to avoid repeated fetching, rate limits, and abuse.
-Impact: The dashboard shows last refresh time and next allowed refresh time.
-Temporary or permanent: Permanent default; cooldown length can be changed later.
-Follow-up: Apply the same cooldown/backoff pattern when ATS refresh is added.
+New plan: Keep refresh manual and show last refresh time, but do not disable the
+button after a successful refresh. Block only concurrent refreshes.
+Reason: User wants a ready-made list and direct control over when refresh
+happens.
+Impact: Refresh is still deliberate and not scheduled. A running refresh is
+protected by a server lock.
+Temporary or permanent: Permanent default unless automatic scheduling is
+requested.
+Follow-up: Keep Tavily/query backoff for provider failures instead of UI
+cooldown.
 
 Decision changed: Dashboard filters.
 Previous plan: Include search, location, role, and source filters.
@@ -268,18 +274,17 @@ Reason: User wants the page to stay simple and not require role/source filtering
 Impact: Fetching should stay broad; ranking can still favor relevant roles and
 bigger US cities behind the scenes.
 Temporary or permanent: Permanent unless the dashboard gets too noisy.
-Follow-up: Add semantic role filtering only after a free Groq path is wired in.
+Follow-up: Add semantic role filtering only after a free provider path is chosen.
 
 Decision changed: Semantic role filtering.
 Previous plan: Use deterministic role heuristics only.
-New plan: Keep deterministic heuristics now, but allow a future optional Groq
+New plan: Keep deterministic heuristics now, but allow a future optional
 semantic role filter.
 Reason: User is interested in semantic filtering for adjacent tech roles.
-Impact: No Groq calls are made yet. If added, the key belongs in `.env` as
-`GROQ_API_KEY`.
+Impact: No LLM calls are made yet and no semantic provider key is required.
 Temporary or permanent: Planned optional enhancement.
-Follow-up: Add Groq only behind explicit opt-in and cache classifications so
-jobs are not reclassified repeatedly.
+Follow-up: Add any semantic provider only behind explicit opt-in and cache
+classifications so jobs are not reclassified repeatedly.
 
 Decision changed: Google Jobs source.
 Previous plan: Keep Google Jobs through `python-jobspy`.
@@ -335,3 +340,82 @@ still preserving a minimum discovery path.
 Temporary or permanent: Permanent default.
 Follow-up: Surface the current query budget in the dashboard if it becomes useful
 for debugging.
+
+Decision changed: Deployment target.
+Previous plan: Keep Render/cloud deployment as a likely path after local
+dashboard worked.
+New plan: Maintain the app as a laptop-hosted personal tool. Use local SQLite in
+`data/`, optionally expose it privately over Tailscale, and treat cloud hosting
+as demo/optional unless paid durable storage is acceptable.
+Reason: The user wants strict `$0` operation, and durable cloud SQLite usually
+requires paid persistent disk.
+Impact: Deployment docs and defaults optimize for local reliability instead of
+always-on cloud hosting.
+Temporary or permanent: Permanent until the user accepts a paid/cloud tradeoff.
+Follow-up: Keep cloud-specific files minimal and clearly labeled as optional.
+
+Decision changed: Maintained output format.
+Previous plan: Keep the daily Markdown digest feature alongside the dashboard.
+New plan: Remove the maintained Markdown digest path and keep the private
+dashboard as the product surface.
+Reason: The user switched from email/Markdown digests to a live personal job
+page and wants unused files/tech removed.
+Impact: The `digest` package, digest script, digest tests, and `digests/`
+placeholder are removed. SQLite and ranking still feed the dashboard.
+Temporary or permanent: Permanent unless the user asks to restore Markdown
+exports later.
+Follow-up: Keep docs and stage plans centered on dashboard refresh.
+
+Decision changed: Scoring storage.
+Previous plan: Keep score-oriented tables and repository helpers for possible
+resume/GPT scoring.
+New plan: Remove dormant GPT-score storage helpers from the active schema and
+repository.
+Reason: Resume/LLM scoring is out of scope, and the project should stay simple
+for one personal user.
+Impact: New databases no longer create `job_scores`; deterministic ranking
+still computes in memory for dashboard ordering.
+Temporary or permanent: Permanent unless paid or semantic scoring is explicitly
+re-added.
+Follow-up: If semantic filtering is added later, cache it in a purpose-built
+table instead of reviving generic resume-score plumbing.
+
+Decision changed: Cloud deployment files.
+Previous plan: Keep Docker and Render files as optional deployment paths.
+New plan: Remove Docker/Render project files and document laptop-hosted access
+as the maintained free path.
+Reason: Strict `$0` durable cloud hosting is not the target, and unused deploy
+files made the repo look more production-hosted than it is.
+Impact: Local serve/Tailscale remains the supported path. Cloud hosting can be
+reintroduced later with an explicit durability/cost decision.
+Temporary or permanent: Permanent until the user asks for a hosted deployment
+again.
+Follow-up: Keep deployment docs clear about auth whenever the app is reachable
+outside localhost.
+
+Decision changed: Stored ATS crawl scheduling.
+Previous plan: Crawl every stored Ashby, Greenhouse, and Lever source selected
+by the source cap on each refresh.
+New plan: Persist adaptive scheduling in SQLite. Each source tracks usefulness,
+recent empty/error streaks, last seen/inserted counts, and `next_crawl_after`.
+Refresh only crawls sources that are due.
+Reason: Most company boards will not produce new relevant jobs every day, and
+recrawling all of them burns time and upstream requests.
+Impact: Refreshes should get faster and friendlier to source APIs while still
+checking productive companies more often.
+Temporary or permanent: Permanent default.
+Follow-up: Tune delay/score values from real local results.
+
+Decision changed: Refresh execution.
+Previous plan: Crawl stored ATS sources sequentially inside the request/response
+cycle.
+New plan: Run refresh in a background thread, crawl due ATS boards with bounded
+parallel workers, apply per-source timeouts, and show progress/ETA through a
+dashboard polling endpoint.
+Reason: Long refreshes looked stuck and one slow company could block the whole
+run.
+Impact: The page can show progress while refresh runs, and stale running crawl
+rows from interrupted processes are cleaned up on the next refresh.
+Temporary or permanent: Permanent.
+Follow-up: Keep worker count conservative unless manual testing shows sources
+handle more parallelism comfortably.

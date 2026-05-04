@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 from job_crawler.crawlers.ashby import fetch_ashby_jobs
@@ -23,6 +25,7 @@ SourceFetcher = Callable[..., list[JobPosting]]
 GitHubBoardsFetcher = Callable[..., list[JobPosting]]
 HnFetcher = Callable[..., list[JobPosting]]
 WebDiscoveryFetcher = Callable[..., list]
+ProgressCallback = Callable[[dict[str, object]], None]
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,7 @@ class SourceRefreshResult:
     seen: int
     inserted: int
     error: str | None = None
+    skipped: bool = False
 
 
 @dataclass(frozen=True)
@@ -43,8 +47,6 @@ class RefreshResult:
     candidates: int
     refreshed: bool = True
     last_refresh_at: str | None = None
-    next_refresh_at: str | None = None
-    cooldown_seconds_remaining: int = 0
 
     @property
     def seen(self) -> int:
@@ -63,6 +65,28 @@ REFRESH_STATE_KEY = "last_refresh_at"
 WEB_DISCOVERY_QUERY_BUDGET_KEY = "web_discovery_query_budget"
 WEB_DISCOVERY_MIN_QUERY_BUDGET = 10
 WEB_DISCOVERY_BACKOFF_STEP = 10
+DEFAULT_ATS_WORKERS = 8
+DEFAULT_SOURCE_TIMEOUT_SECONDS = 35.0
+STALE_RUN_MINUTES = 90
+
+
+@dataclass(frozen=True)
+class StoredSourcePlan:
+    """One stored ATS source selected for this refresh."""
+
+    source_type: str
+    source_id: int
+    slug: str
+    crawl_run_id: int
+
+
+@dataclass(frozen=True)
+class StoredSourceFetchResult:
+    """Network result for one stored source."""
+
+    plan: StoredSourcePlan
+    jobs: list[JobPosting]
+    error: str | None = None
 
 
 def refresh_yc(
@@ -73,42 +97,17 @@ def refresh_yc(
     candidate_limit: int = 10_000,
     yc_limit: int = 80,
     yc_fetcher: JobFetcher = fetch_yc_jobs,
-    cooldown_hours: int = 6,
-    force: bool = False,
 ) -> RefreshResult:
     """Fetch YC, store/dedupe jobs, and regenerate the dashboard."""
     source_results = []
     with open_database(db_path) as connection:
         repo = JobRepository(connection)
-        now = datetime.now(UTC)
-        last_refresh_at = _parse_datetime(repo.get_app_state(REFRESH_STATE_KEY))
-        if last_refresh_at is not None:
-            next_refresh_at = last_refresh_at + timedelta(hours=cooldown_hours)
-            if not force and now < next_refresh_at:
-                jobs = repo.list_jobs_for_digest(limit=candidate_limit)
-                refresh_runs = repo.list_recent_crawl_runs()
-                write_dashboard(
-                    jobs,
-                    output_path=output_path,
-                    days=days,
-                    refresh_runs=refresh_runs,
-                )
-                return RefreshResult(
-                    sources=(),
-                    candidates=len(jobs),
-                    refreshed=False,
-                    last_refresh_at=last_refresh_at.isoformat(),
-                    next_refresh_at=next_refresh_at.isoformat(),
-                    cooldown_seconds_remaining=int((next_refresh_at - now).total_seconds()),
-                )
-
         source_results.append(
             _refresh_source(repo, source="yc", fetcher=yc_fetcher, limit=yc_limit)
         )
         refreshed_at = datetime.now(UTC)
-        next_refresh_at = refreshed_at + timedelta(hours=cooldown_hours)
         repo.set_app_state(REFRESH_STATE_KEY, refreshed_at.isoformat())
-        jobs = repo.list_jobs_for_digest(limit=candidate_limit)
+        jobs = repo.list_recent_jobs(limit=candidate_limit)
         refresh_runs = repo.list_recent_crawl_runs()
 
     write_dashboard(jobs, output_path=output_path, days=days, refresh_runs=refresh_runs)
@@ -116,7 +115,6 @@ def refresh_yc(
         sources=tuple(source_results),
         candidates=len(jobs),
         last_refresh_at=refreshed_at.isoformat(),
-        next_refresh_at=next_refresh_at.isoformat(),
     )
 
 
@@ -140,35 +138,21 @@ def refresh_jobs(
     hn_fetcher: HnFetcher = fetch_hn_who_is_hiring_jobs,
     yc_fetcher: JobFetcher = fetch_yc_jobs,
     web_discovery_fetcher: WebDiscoveryFetcher = discover_sources_from_web_search,
-    cooldown_hours: int = 6,
-    force: bool = False,
+    ats_workers: int = DEFAULT_ATS_WORKERS,
+    source_timeout_seconds: float = DEFAULT_SOURCE_TIMEOUT_SECONDS,
+    progress_callback: ProgressCallback | None = None,
 ) -> RefreshResult:
     """Fetch stored job sources, store/dedupe jobs, and regenerate the dashboard."""
     source_results = []
     with open_database(db_path) as connection:
         repo = JobRepository(connection)
-        now = datetime.now(UTC)
-        last_refresh_at = _parse_datetime(repo.get_app_state(REFRESH_STATE_KEY))
-        if last_refresh_at is not None:
-            next_refresh_at = last_refresh_at + timedelta(hours=cooldown_hours)
-            if not force and now < next_refresh_at:
-                jobs = repo.list_jobs_for_digest(limit=candidate_limit)
-                refresh_runs = repo.list_recent_crawl_runs()
-                write_dashboard(
-                    jobs,
-                    output_path=output_path,
-                    days=days,
-                    refresh_runs=refresh_runs,
-                )
-                return RefreshResult(
-                    sources=(),
-                    candidates=len(jobs),
-                    refreshed=False,
-                    last_refresh_at=last_refresh_at.isoformat(),
-                    next_refresh_at=next_refresh_at.isoformat(),
-                    cooldown_seconds_remaining=int((next_refresh_at - now).total_seconds()),
-                )
-
+        stale_runs = repo.cleanup_stale_crawl_runs(stale_after_minutes=STALE_RUN_MINUTES)
+        if stale_runs:
+            _emit_progress(
+                progress_callback,
+                phase="cleanup",
+                message=f"Cleaned up {stale_runs} stale crawl run(s).",
+            )
         web_discovery_query_budget = _web_discovery_query_budget(
             repo,
             ceiling=web_discovery_queries,
@@ -214,22 +198,20 @@ def refresh_jobs(
             "greenhouse": greenhouse_fetcher,
             "lever": lever_fetcher,
         }
-        for source_type, fetcher in fetchers.items():
-            for source in repo.list_sources(source_type=source_type)[:max_sources]:
-                source_results.append(
-                    _refresh_stored_source(
-                        repo,
-                        source_type=source_type,
-                        source_id=int(source["id"]),
-                        slug=str(source["slug"]),
-                        limit=ashby_limit,
-                        fetcher=fetcher,
-                    )
-                )
+        source_results.extend(
+            _refresh_stored_sources_parallel(
+                repo,
+                fetchers=fetchers,
+                limit=ashby_limit,
+                max_sources=max_sources,
+                workers=ats_workers,
+                source_timeout_seconds=source_timeout_seconds,
+                progress_callback=progress_callback,
+            )
+        )
         refreshed_at = datetime.now(UTC)
-        next_refresh_at = refreshed_at + timedelta(hours=cooldown_hours)
         repo.set_app_state(REFRESH_STATE_KEY, refreshed_at.isoformat())
-        jobs = repo.list_jobs_for_digest(limit=candidate_limit)
+        jobs = repo.list_recent_jobs(limit=candidate_limit)
         refresh_runs = repo.list_recent_crawl_runs()
 
     write_dashboard(jobs, output_path=output_path, days=days, refresh_runs=refresh_runs)
@@ -237,7 +219,6 @@ def refresh_jobs(
         sources=tuple(source_results),
         candidates=len(jobs),
         last_refresh_at=refreshed_at.isoformat(),
-        next_refresh_at=next_refresh_at.isoformat(),
     )
 
 
@@ -324,6 +305,175 @@ def _refresh_stored_source(
             inserted=jobs_inserted,
             error=str(exc),
         )
+
+
+def _refresh_stored_sources_parallel(
+    repo: JobRepository,
+    *,
+    fetchers: dict[str, SourceFetcher],
+    limit: int,
+    max_sources: int,
+    workers: int,
+    source_timeout_seconds: float,
+    progress_callback: ProgressCallback | None,
+) -> list[SourceRefreshResult]:
+    plans: list[StoredSourcePlan] = []
+    per_type_limit = max(1, max_sources)
+    for source_type in fetchers:
+        for source in repo.list_due_sources(source_type=source_type, limit=per_type_limit):
+            if len(plans) >= max_sources:
+                break
+            plans.append(
+                StoredSourcePlan(
+                    source_type=source_type,
+                    source_id=int(source["id"]),
+                    slug=str(source["slug"]),
+                    crawl_run_id=repo.start_crawl_run(
+                        source_type=source_type,
+                        source_id=int(source["id"]),
+                    ),
+                )
+            )
+        if len(plans) >= max_sources:
+            break
+
+    if not plans:
+        _emit_progress(
+            progress_callback,
+            phase="ats",
+            message="No stored ATS sources due for this refresh.",
+            total=0,
+            completed=0,
+            eta_seconds=0,
+        )
+        return [
+            SourceRefreshResult(
+                source="ats:scheduled_sources",
+                seen=0,
+                inserted=0,
+                skipped=True,
+            )
+        ]
+
+    total = len(plans)
+    completed = 0
+    started_at = time.monotonic()
+    _emit_progress(
+        progress_callback,
+        phase="ats",
+        message=f"Fetching {total} due ATS company boards...",
+        total=total,
+        completed=completed,
+        eta_seconds=None,
+    )
+
+    executor = ThreadPoolExecutor(max_workers=max(1, workers))
+    futures: dict[Future[StoredSourceFetchResult], tuple[StoredSourcePlan, float]] = {
+        executor.submit(
+            _fetch_stored_source_jobs,
+            plan,
+            fetcher=fetchers[plan.source_type],
+            limit=limit,
+        ): (plan, time.monotonic())
+        for plan in plans
+    }
+    results: list[SourceRefreshResult] = []
+    try:
+        while futures:
+            done, _ = wait(futures, timeout=0.5, return_when=FIRST_COMPLETED)
+            now = time.monotonic()
+            timed_out = [
+                future
+                for future, (_, start) in futures.items()
+                if now - start > source_timeout_seconds
+            ]
+            for future in timed_out:
+                plan, _ = futures.pop(future)
+                future.cancel()
+                result = StoredSourceFetchResult(
+                    plan=plan,
+                    jobs=[],
+                    error=f"timed out after {source_timeout_seconds:.0f}s",
+                )
+                results.append(_store_stored_source_result(repo, result))
+                completed += 1
+                _emit_ats_progress(
+                    progress_callback,
+                    started_at=started_at,
+                    completed=completed,
+                    total=total,
+                    source=f"{plan.source_type}:{plan.slug}",
+                )
+            for future in done:
+                if future not in futures:
+                    continue
+                plan, _ = futures.pop(future)
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    result = StoredSourceFetchResult(plan=plan, jobs=[], error=str(exc))
+                results.append(_store_stored_source_result(repo, result))
+                completed += 1
+                _emit_ats_progress(
+                    progress_callback,
+                    started_at=started_at,
+                    completed=completed,
+                    total=total,
+                    source=f"{plan.source_type}:{plan.slug}",
+                )
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+    return results
+
+
+def _fetch_stored_source_jobs(
+    plan: StoredSourcePlan,
+    *,
+    fetcher: SourceFetcher,
+    limit: int,
+) -> StoredSourceFetchResult:
+    try:
+        jobs = _fetch_source_jobs(plan.source_type, fetcher=fetcher, slug=plan.slug, limit=limit)
+        return StoredSourceFetchResult(plan=plan, jobs=jobs)
+    except Exception as exc:
+        return StoredSourceFetchResult(plan=plan, jobs=[], error=str(exc))
+
+
+def _store_stored_source_result(
+    repo: JobRepository,
+    result: StoredSourceFetchResult,
+) -> SourceRefreshResult:
+    jobs_seen = len(result.jobs)
+    jobs_inserted = 0
+    if result.error is None:
+        for job in result.jobs:
+            jobs_inserted += int(repo.insert_job(job).inserted)
+        repo.finish_crawl_run(
+            crawl_run_id=result.plan.crawl_run_id,
+            status="succeeded",
+            jobs_seen=jobs_seen,
+            jobs_inserted=jobs_inserted,
+        )
+    else:
+        repo.finish_crawl_run(
+            crawl_run_id=result.plan.crawl_run_id,
+            status="failed",
+            jobs_seen=jobs_seen,
+            jobs_inserted=jobs_inserted,
+            error=result.error,
+        )
+    repo.record_source_crawl_outcome(
+        source_id=result.plan.source_id,
+        jobs_seen=jobs_seen,
+        jobs_inserted=jobs_inserted,
+        error=result.error,
+    )
+    return SourceRefreshResult(
+        source=f"{result.plan.source_type}:{result.plan.slug}",
+        seen=jobs_seen,
+        inserted=jobs_inserted,
+        error=result.error,
+    )
 
 
 def _refresh_web_discovery(
@@ -481,13 +631,27 @@ def _refresh_github_boards(
         )
 
 
-def _parse_datetime(value: str | None) -> datetime | None:
-    if value is None:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+def _emit_ats_progress(
+    callback: ProgressCallback | None,
+    *,
+    started_at: float,
+    completed: int,
+    total: int,
+    source: str,
+) -> None:
+    elapsed = max(0.0, time.monotonic() - started_at)
+    average = elapsed / completed if completed else 0.0
+    remaining = max(0, total - completed)
+    _emit_progress(
+        callback,
+        phase="ats",
+        message=f"Fetched {completed}/{total} ATS boards. Latest: {source}.",
+        total=total,
+        completed=completed,
+        eta_seconds=round(average * remaining),
+    )
+
+
+def _emit_progress(callback: ProgressCallback | None, **payload: object) -> None:
+    if callback is not None:
+        callback(payload)

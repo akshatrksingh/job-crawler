@@ -13,7 +13,8 @@ def test_dashboard_handler_can_be_constructed() -> None:
         github_jobs_limit=25,
         hn_limit=10,
         yc_limit=10,
-        cooldown_hours=6,
+        ats_workers=2,
+        source_timeout_seconds=5,
         auth_username=None,
         auth_password=None,
     )
@@ -36,7 +37,8 @@ def test_basic_auth_helper_is_opt_in_and_checks_credentials() -> None:
         github_jobs_limit=25,
         hn_limit=10,
         yc_limit=10,
-        cooldown_hours=6,
+        ats_workers=2,
+        source_timeout_seconds=5,
     )
     locked_config = DashboardServerConfig(
         db_path=Path("data/job_crawler.sqlite"),
@@ -47,7 +49,8 @@ def test_basic_auth_helper_is_opt_in_and_checks_credentials() -> None:
         github_jobs_limit=25,
         hn_limit=10,
         yc_limit=10,
-        cooldown_hours=6,
+        ats_workers=2,
+        source_timeout_seconds=5,
         auth_username="akshat",
         auth_password="secret",
     )
@@ -69,7 +72,8 @@ def test_dashboard_handler_allows_health_without_auth() -> None:
             github_jobs_limit=25,
             hn_limit=10,
             yc_limit=10,
-            cooldown_hours=6,
+            ats_workers=2,
+            source_timeout_seconds=5,
             auth_username="akshat",
             auth_password="secret",
         )

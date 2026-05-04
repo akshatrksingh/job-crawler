@@ -80,7 +80,6 @@ def render_dashboard(
     today: date | None = None,
     days: int = 14,
     last_refresh_at: str | None = None,
-    cooldown_hours: int = 6,
     refresh_runs: list[Mapping[str, Any]] | None = None,
 ) -> str:
     """Render a standalone local HTML dashboard."""
@@ -88,7 +87,8 @@ def render_dashboard(
     rows = "\n".join(_render_row(job) for job in selected)
     refresh_rows = "\n".join(_render_refresh_run(row) for row in (refresh_runs or []))
     refresh_status = refresh_rows or _render_empty_refresh_run()
-    refresh = _refresh_metadata(last_refresh_at, cooldown_hours)
+    refresh_warning = _render_refresh_warning(refresh_runs or [])
+    refresh = _refresh_metadata(last_refresh_at)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -192,6 +192,16 @@ def render_dashboard(
       color: #9f2f2f;
       max-width: 360px;
     }}
+    .warning {{
+      margin: 0 0 18px;
+      padding: 12px 14px;
+      border: 1px solid #c98252;
+      border-radius: 8px;
+      background: #fff5e8;
+      color: #6c3d20;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+    }}
     table {{
       width: 100%;
       border-collapse: collapse;
@@ -263,6 +273,7 @@ def render_dashboard(
         <div id="status" class="status">{escape(refresh["status"])}</div>
       </div>
     </header>
+    {refresh_warning}
 
     <div class="table-wrap">
       <table>
@@ -354,21 +365,52 @@ def render_dashboard(
     }});
     refresh.addEventListener("click", async () => {{
       refresh.disabled = true;
-      status.textContent = "Refreshing jobs...";
+      status.textContent = "Starting refresh...";
       try {{
         const response = await fetch("/api/refresh", {{ method: "POST" }});
         if (!response.ok) throw new Error("refresh failed");
-        const result = await response.json();
-        if (!result.refreshed) {{
-          status.textContent = result.message;
-          return;
-        }}
-        window.location.reload();
+        await response.json();
+        pollRefresh();
       }} catch (error) {{
         status.textContent = "Refresh requires the local server.";
         refresh.disabled = false;
       }}
     }});
+    async function pollRefresh() {{
+      try {{
+        const response = await fetch("/api/refresh-progress");
+        if (!response.ok) throw new Error("progress failed");
+        const result = await response.json();
+        status.textContent = formatProgress(result);
+        if (result.running) {{
+          setTimeout(pollRefresh, 1500);
+          return;
+        }}
+        if (result.done) {{
+          window.location.reload();
+          return;
+        }}
+        refresh.disabled = false;
+      }} catch (error) {{
+        status.textContent = "Refresh status unavailable.";
+        refresh.disabled = false;
+      }}
+    }}
+    function formatProgress(result) {{
+      const message = result.message || "Refreshing jobs...";
+      if (Number.isFinite(result.completed) && Number.isFinite(result.total) && result.total > 0) {{
+        const eta = Number.isFinite(result.eta_seconds)
+          ? ` ETA ~${{formatEta(result.eta_seconds)}}.`
+          : "";
+        return `${{message}} (${{result.completed}}/${{result.total}})${{eta}}`;
+      }}
+      return message;
+    }}
+    function formatEta(seconds) {{
+      const value = Math.max(0, Math.round(seconds));
+      if (value < 60) return `${{value}}s`;
+      return `${{Math.ceil(value / 60)}}m`;
+    }}
     renderPage();
   </script>
 </body>
@@ -383,7 +425,6 @@ def write_dashboard(
     today: date | None = None,
     days: int = 14,
     last_refresh_at: str | None = None,
-    cooldown_hours: int = 6,
     refresh_runs: list[Mapping[str, Any]] | None = None,
 ) -> Path:
     """Write the local dashboard HTML."""
@@ -394,7 +435,6 @@ def write_dashboard(
             today=today,
             days=days,
             last_refresh_at=last_refresh_at,
-            cooldown_hours=cooldown_hours,
             refresh_runs=refresh_runs,
         ),
         encoding="utf-8",
@@ -441,6 +481,27 @@ def _render_refresh_run(row: Mapping[str, Any]) -> str:
         f"<td>{escape(finished)}</td>"
         f'<td class="error-text">{error}</td>'
         "</tr>"
+    )
+
+
+def _render_refresh_warning(refresh_runs: list[Mapping[str, Any]]) -> str:
+    web_discovery_run = next(
+        (
+            row
+            for row in refresh_runs
+            if _row_value(row, "source_type") == "web_search_discovery"
+        ),
+        None,
+    )
+    if not web_discovery_run or _row_value(web_discovery_run, "status") != "failed":
+        return ""
+    error = str(_row_value(web_discovery_run, "error") or "web discovery failed")
+    return (
+        '<div class="warning">'
+        "Tavily/web discovery failed for this refresh, so latest newly discovered "
+        "company boards may be missing. Other sources still refreshed. "
+        f"Next refresh will try discovery again. <span>{escape(error)}</span>"
+        "</div>"
     )
 
 
@@ -516,7 +577,7 @@ def _date_to_ordinal(value: date) -> int:
     return value.toordinal()
 
 
-def _refresh_metadata(last_refresh_at: str | None, cooldown_hours: int) -> dict[str, object]:
+def _refresh_metadata(last_refresh_at: str | None) -> dict[str, object]:
     if last_refresh_at is None:
         return {"disabled": False, "status": "Never refreshed"}
     parsed = _parse_datetime(last_refresh_at)

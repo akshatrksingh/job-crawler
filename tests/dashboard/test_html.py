@@ -126,6 +126,56 @@ def test_render_dashboard_shows_refresh_errors() -> None:
     assert "network issue" in html
 
 
+def test_render_dashboard_warns_when_web_discovery_fails() -> None:
+    html = render_dashboard(
+        [],
+        refresh_runs=[
+            {
+                "source_type": "web_search_discovery",
+                "source_slug": None,
+                "status": "failed",
+                "jobs_seen": 0,
+                "jobs_inserted": 0,
+                "finished_at": "2026-04-29 12:00:00",
+                "error": "429 too many requests",
+            },
+            {
+                "source_type": "github_jobs",
+                "source_slug": None,
+                "status": "succeeded",
+                "jobs_seen": 250,
+                "jobs_inserted": 10,
+                "finished_at": "2026-04-29 12:01:00",
+                "error": None,
+            },
+        ],
+    )
+
+    assert "Tavily/web discovery failed" in html
+    assert "Other sources still refreshed" in html
+    assert "Next refresh will try discovery again" in html
+    assert "429 too many requests" in html
+
+
+def test_render_dashboard_does_not_warn_when_web_discovery_succeeds() -> None:
+    html = render_dashboard(
+        [],
+        refresh_runs=[
+            {
+                "source_type": "web_search_discovery",
+                "source_slug": None,
+                "status": "succeeded",
+                "jobs_seen": 10,
+                "jobs_inserted": 5,
+                "finished_at": "2026-04-29 12:00:00",
+                "error": None,
+            }
+        ],
+    )
+
+    assert "Tavily/web discovery failed" not in html
+
+
 def test_render_dashboard_has_no_manual_discovery_controls() -> None:
     html = render_dashboard(
         [
@@ -348,12 +398,19 @@ def test_render_dashboard_shows_last_refresh_without_disabling_refresh() -> None
     html = render_dashboard(
         [],
         last_refresh_at=datetime.now(UTC).isoformat(),
-        cooldown_hours=6,
     )
 
     assert "Last refresh" in html
     assert "next after" not in html
     assert 'id="refresh" type="button" disabled' not in html
+
+
+def test_render_dashboard_polls_refresh_progress() -> None:
+    html = render_dashboard([])
+
+    assert "/api/refresh-progress" in html
+    assert "ETA ~" in html
+    assert "pollRefresh" in html
 
 
 def test_write_dashboard_creates_index_html(tmp_path) -> None:

@@ -6,6 +6,7 @@ import base64
 import hmac
 import json
 import threading
+from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -29,7 +30,8 @@ class DashboardServerConfig:
         github_jobs_limit: int,
         hn_limit: int,
         yc_limit: int,
-        cooldown_hours: int,
+        ats_workers: int,
+        source_timeout_seconds: float,
         auth_username: str | None = None,
         auth_password: str | None = None,
     ) -> None:
@@ -41,10 +43,13 @@ class DashboardServerConfig:
         self.github_jobs_limit = github_jobs_limit
         self.hn_limit = hn_limit
         self.yc_limit = yc_limit
-        self.cooldown_hours = cooldown_hours
+        self.ats_workers = ats_workers
+        self.source_timeout_seconds = source_timeout_seconds
         self.auth_username = auth_username
         self.auth_password = auth_password
         self.refresh_lock = threading.Lock()
+        self.progress_lock = threading.Lock()
+        self.refresh_progress: dict[str, object] = _idle_progress()
 
     @property
     def auth_enabled(self) -> bool:
@@ -64,7 +69,8 @@ def run_dashboard_server(
     github_jobs_limit: int = 250,
     hn_limit: int = 80,
     yc_limit: int = 80,
-    cooldown_hours: int = 6,
+    ats_workers: int = 8,
+    source_timeout_seconds: float = 35.0,
     auth_username: str | None = None,
     auth_password: str | None = None,
 ) -> None:
@@ -78,7 +84,8 @@ def run_dashboard_server(
         github_jobs_limit=github_jobs_limit,
         hn_limit=hn_limit,
         yc_limit=yc_limit,
-        cooldown_hours=cooldown_hours,
+        ats_workers=ats_workers,
+        source_timeout_seconds=source_timeout_seconds,
         auth_username=auth_username,
         auth_password=auth_password,
     )
@@ -104,6 +111,9 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
                 self._send_auth_required()
                 return
             if self.path not in {"/", "/index.html"}:
+                if self.path == "/api/refresh-progress":
+                    self._send_json(_get_progress(config))
+                    return
                 self.send_error(HTTPStatus.NOT_FOUND)
                 return
             html = _render_current_dashboard(config)
@@ -120,52 +130,29 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
 
         def _handle_refresh(self) -> None:
             if not config.refresh_lock.acquire(blocking=False):
-                self._send_json(
-                    {
-                        "ok": False,
-                        "message": "Refresh is already running.",
-                        "refreshed": False,
-                        "seen": 0,
-                        "inserted": 0,
-                        "candidates": 0,
-                        "sources": [],
-                        "errors": ["Refresh is already running."],
-                    }
-                )
+                self._send_json(_get_progress(config))
                 return
-            try:
-                result = refresh_jobs(
-                    db_path=config.db_path,
-                    output_path=config.output_path,
-                    days=config.days,
-                    candidate_limit=config.candidate_limit,
-                    ashby_limit=config.ashby_limit,
-                    github_jobs_limit=config.github_jobs_limit,
-                    hn_limit=config.hn_limit,
-                    yc_limit=config.yc_limit,
-                    cooldown_hours=config.cooldown_hours,
-                    force=True,
-                )
-                payload = {
-                    "ok": not result.errors,
-                    "message": (
-                        "Fetched stored ATS sources and refreshed dashboard."
-                        if result.refreshed
-                        else "Refresh cooldown active."
-                    ),
-                    "refreshed": result.refreshed,
-                    "seen": result.seen,
-                    "inserted": result.inserted,
-                    "candidates": result.candidates,
-                    "last_refresh_at": result.last_refresh_at,
-                    "next_refresh_at": result.next_refresh_at,
-                    "cooldown_seconds_remaining": result.cooldown_seconds_remaining,
-                    "sources": [source.__dict__ for source in result.sources],
-                    "errors": result.errors,
-                }
-                self._send_json(payload)
-            finally:
-                config.refresh_lock.release()
+            _set_progress(
+                config,
+                ok=True,
+                running=True,
+                done=False,
+                message="Starting refresh...",
+                started_at=_now_iso(),
+                phase="starting",
+                completed=0,
+                total=None,
+                eta_seconds=None,
+                refreshed=False,
+                seen=0,
+                inserted=0,
+                candidates=0,
+                sources=[],
+                errors=[],
+            )
+            thread = threading.Thread(target=_run_refresh_background, args=(config,), daemon=True)
+            thread.start()
+            self._send_json(_get_progress(config), status=HTTPStatus.ACCEPTED)
 
         def _read_json(self) -> dict[str, object]:
             length = int(self.headers.get("Content-Length", "0") or "0")
@@ -216,6 +203,88 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
     return DashboardRequestHandler
 
 
+def _run_refresh_background(config: DashboardServerConfig) -> None:
+    try:
+        result = refresh_jobs(
+            db_path=config.db_path,
+            output_path=config.output_path,
+            days=config.days,
+            candidate_limit=config.candidate_limit,
+            ashby_limit=config.ashby_limit,
+            github_jobs_limit=config.github_jobs_limit,
+            hn_limit=config.hn_limit,
+            yc_limit=config.yc_limit,
+            ats_workers=config.ats_workers,
+            source_timeout_seconds=config.source_timeout_seconds,
+            progress_callback=lambda payload: _set_progress(config, **payload),
+        )
+        _set_progress(
+            config,
+            ok=not result.errors,
+            running=False,
+            done=True,
+            phase="done",
+            message="Refresh complete.",
+            completed=None,
+            total=None,
+            eta_seconds=0,
+            refreshed=result.refreshed,
+            seen=result.seen,
+            inserted=result.inserted,
+            candidates=result.candidates,
+            last_refresh_at=result.last_refresh_at,
+            sources=[source.__dict__ for source in result.sources],
+            errors=result.errors,
+            finished_at=_now_iso(),
+        )
+    except Exception as exc:
+        _set_progress(
+            config,
+            ok=False,
+            running=False,
+            done=True,
+            phase="failed",
+            message=f"Refresh failed: {exc}",
+            errors=[str(exc)],
+            finished_at=_now_iso(),
+        )
+    finally:
+        config.refresh_lock.release()
+
+
+def _idle_progress() -> dict[str, object]:
+    return {
+        "ok": True,
+        "running": False,
+        "done": False,
+        "message": "Idle.",
+        "phase": "idle",
+        "completed": None,
+        "total": None,
+        "eta_seconds": None,
+        "refreshed": False,
+        "seen": 0,
+        "inserted": 0,
+        "candidates": 0,
+        "sources": [],
+        "errors": [],
+    }
+
+
+def _get_progress(config: DashboardServerConfig) -> dict[str, object]:
+    with config.progress_lock:
+        return dict(config.refresh_progress)
+
+
+def _set_progress(config: DashboardServerConfig, **updates: object) -> None:
+    with config.progress_lock:
+        config.refresh_progress.update(updates)
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
 def _is_authorized(header: str | None, config: DashboardServerConfig) -> bool:
     if not config.auth_enabled:
         return True
@@ -238,9 +307,8 @@ def _render_current_dashboard(config: DashboardServerConfig) -> str:
     with open_database(config.db_path) as connection:
         repo = JobRepository(connection)
         return render_dashboard(
-            repo.list_jobs_for_digest(limit=config.candidate_limit),
+            repo.list_recent_jobs(limit=config.candidate_limit),
             days=config.days,
             last_refresh_at=repo.get_app_state("last_refresh_at"),
-            cooldown_hours=config.cooldown_hours,
             refresh_runs=repo.list_recent_crawl_runs(),
         )

@@ -2,7 +2,7 @@ from job_crawler.crawlers.base import JobPosting
 from job_crawler.storage import JobRepository, open_database
 
 
-def test_list_jobs_for_digest_returns_recent_jobs_as_postings() -> None:
+def test_list_recent_jobs_returns_recent_jobs_as_postings() -> None:
     with open_database(":memory:") as connection:
         repo = JobRepository(connection)
         repo.insert_job(
@@ -17,7 +17,7 @@ def test_list_jobs_for_digest_returns_recent_jobs_as_postings() -> None:
             )
         )
 
-        jobs = repo.list_jobs_for_digest()
+        jobs = repo.list_recent_jobs()
 
         assert len(jobs) == 1
         assert jobs[0].company == "Example Co"
@@ -25,7 +25,7 @@ def test_list_jobs_for_digest_returns_recent_jobs_as_postings() -> None:
         assert jobs[0].location == "New York, NY"
 
 
-def test_list_jobs_for_digest_includes_hn_by_default() -> None:
+def test_list_recent_jobs_includes_hn_by_default() -> None:
     with open_database(":memory:") as connection:
         repo = JobRepository(connection)
         repo.insert_job(
@@ -40,7 +40,7 @@ def test_list_jobs_for_digest_includes_hn_by_default() -> None:
             )
         )
 
-        jobs = repo.list_jobs_for_digest()
+        jobs = repo.list_recent_jobs()
 
         assert len(jobs) == 1
         assert jobs[0].source == "hn"
