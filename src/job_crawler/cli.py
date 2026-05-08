@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--hn-limit", type=int, default=80)
     serve.add_argument("--yc-limit", type=int, default=80)
     serve.add_argument("--ats-workers", type=int, default=8)
-    serve.add_argument("--source-timeout-seconds", type=float, default=35.0)
+    serve.add_argument("--source-timeout-seconds", type=float, default=75.0)
     serve.add_argument("--auth-username", default=_env_value("JOB_CRAWLER_AUTH_USERNAME"))
     serve.add_argument("--auth-password", default=_env_value("JOB_CRAWLER_AUTH_PASSWORD"))
 

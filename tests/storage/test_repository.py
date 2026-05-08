@@ -101,6 +101,20 @@ def test_insert_job_replaces_github_board_url_when_direct_source_arrives() -> No
         assert row["url"] == "https://jobs.ashbyhq.com/example-company/ats-1"
 
 
+def test_list_recent_jobs_includes_ids_and_delete_jobs_removes_selected_rows() -> None:
+    with open_database(":memory:") as connection:
+        repo = JobRepository(connection)
+        first = repo.insert_job(make_job(source_id="job-1", title="AI Engineer"))
+        second = repo.insert_job(make_job(source_id="job-2", title="Software Engineer"))
+
+        jobs = repo.list_recent_jobs()
+        deleted = repo.delete_jobs([first.job_id, 999])
+
+        assert {job.id for job in jobs} == {first.job_id, second.job_id}
+        assert deleted == 1
+        assert [job.id for job in repo.list_recent_jobs()] == [second.job_id]
+
+
 def test_source_crawl_state_supports_rate_limit_friendly_reruns() -> None:
     with open_database(":memory:") as connection:
         repo = JobRepository(connection)

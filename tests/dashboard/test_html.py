@@ -413,6 +413,24 @@ def test_render_dashboard_polls_refresh_progress() -> None:
     assert "pollRefresh" in html
 
 
+def test_render_dashboard_supports_staged_multi_delete() -> None:
+    job = make_job(
+        "AI Engineer",
+        "Delete Me Co",
+        "Austin, TX",
+        datetime(2026, 4, 28, tzinfo=UTC),
+    )
+    job = JobPosting(**{**job.__dict__, "id": 123})
+
+    html = render_dashboard([job], today=date(2026, 4, 29))
+
+    assert 'data-job-id="123"' in html
+    assert 'id="delete-selected"' in html
+    assert 'id="delete-modal"' in html
+    assert "/api/jobs/delete" in html
+    assert "jobs selected for deletion. Are you sure?" in html
+
+
 def test_write_dashboard_creates_index_html(tmp_path) -> None:
     path = write_dashboard(
         [

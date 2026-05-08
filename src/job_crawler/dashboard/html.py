@@ -17,6 +17,7 @@ from job_crawler.ranking import is_target_role, is_us_role, rank_job, role_categ
 class DashboardJob:
     """A job prepared for the dashboard."""
 
+    id: int | None
     company: str
     title: str
     url: str
@@ -52,6 +53,7 @@ def select_dashboard_jobs(
             continue
         selected.append(
             DashboardJob(
+                id=job.id,
                 company=job.company,
                 title=job.title,
                 url=job.url,
@@ -202,6 +204,53 @@ def render_dashboard(
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 14px;
     }}
+    .bulk-actions {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+    }}
+    .pending-delete {{
+      opacity: 0.42;
+      background: #f2e4d7;
+    }}
+    .select-col {{
+      width: 44px;
+      text-align: center;
+    }}
+    .modal-backdrop {{
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(43, 33, 26, 0.42);
+      z-index: 10;
+    }}
+    .modal {{
+      width: min(420px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    .modal h2 {{
+      font-size: 20px;
+      margin-bottom: 8px;
+    }}
+    .modal-actions {{
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 18px;
+    }}
     table {{
       width: 100%;
       border-collapse: collapse;
@@ -275,10 +324,15 @@ def render_dashboard(
     </header>
     {refresh_warning}
 
+    <div class="bulk-actions">
+      <span id="selection-summary">No jobs selected</span>
+      <button class="secondary" id="delete-selected" type="button" disabled>Save deletions</button>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
+            <th class="select-col">Delete</th>
             <th>Company</th>
             <th>Job</th>
             <th>Location</th>
@@ -326,6 +380,22 @@ def render_dashboard(
       </div>
     </section>
   </main>
+  <div
+    class="modal-backdrop"
+    id="delete-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="delete-title"
+  >
+    <div class="modal">
+      <h2 id="delete-title">Confirm deletions</h2>
+      <p id="delete-message"></p>
+      <div class="modal-actions">
+        <button class="secondary" id="cancel-delete" type="button">Cancel</button>
+        <button id="confirm-delete" type="button">Delete jobs</button>
+      </div>
+    </div>
+  </div>
   <script>
     const pageSize = 50;
     const rows = Array.from(document.querySelectorAll("#jobs tr"));
@@ -335,6 +405,13 @@ def render_dashboard(
     const prev = document.getElementById("prev");
     const next = document.getElementById("next");
     const summary = document.getElementById("page-summary");
+    const selectionSummary = document.getElementById("selection-summary");
+    const deleteSelected = document.getElementById("delete-selected");
+    const deleteModal = document.getElementById("delete-modal");
+    const deleteMessage = document.getElementById("delete-message");
+    const cancelDelete = document.getElementById("cancel-delete");
+    const confirmDelete = document.getElementById("confirm-delete");
+    const selectedJobs = new Set();
     let page = 1;
     let filteredRows = rows;
 
@@ -362,6 +439,45 @@ def render_dashboard(
     next.addEventListener("click", () => {{
       page += 1;
       renderPage();
+    }});
+    document.addEventListener("change", (event) => {{
+      if (!event.target.matches(".delete-toggle")) return;
+      const checkbox = event.target;
+      const row = checkbox.closest("tr");
+      const jobId = checkbox.dataset.jobId;
+      if (checkbox.checked) {{
+        selectedJobs.add(jobId);
+        row.classList.add("pending-delete");
+      }} else {{
+        selectedJobs.delete(jobId);
+        row.classList.remove("pending-delete");
+      }}
+      renderSelection();
+    }});
+    deleteSelected.addEventListener("click", () => {{
+      if (selectedJobs.size === 0) return;
+      deleteMessage.textContent =
+        `${{selectedJobs.size}} jobs selected for deletion. Are you sure?`;
+      deleteModal.style.display = "flex";
+    }});
+    cancelDelete.addEventListener("click", () => {{
+      deleteModal.style.display = "none";
+    }});
+    confirmDelete.addEventListener("click", async () => {{
+      confirmDelete.disabled = true;
+      status.textContent = "Deleting selected jobs...";
+      try {{
+        const response = await fetch("/api/jobs/delete", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify({{ job_ids: Array.from(selectedJobs).map(Number) }}),
+        }});
+        if (!response.ok) throw new Error("delete failed");
+        window.location.reload();
+      }} catch (error) {{
+        status.textContent = "Could not delete selected jobs.";
+        confirmDelete.disabled = false;
+      }}
     }});
     refresh.addEventListener("click", async () => {{
       refresh.disabled = true;
@@ -411,7 +527,15 @@ def render_dashboard(
       if (value < 60) return `${{value}}s`;
       return `${{Math.ceil(value / 60)}}m`;
     }}
+    function renderSelection() {{
+      const count = selectedJobs.size;
+      selectionSummary.textContent = count === 0
+        ? "No jobs selected"
+        : `${{count}} job${{count === 1 ? "" : "s"}} selected for deletion`;
+      deleteSelected.disabled = count === 0;
+    }}
     renderPage();
+    renderSelection();
   </script>
 </body>
 </html>
@@ -443,14 +567,24 @@ def write_dashboard(
 
 
 def _render_row(job: DashboardJob) -> str:
+    job_id = "" if job.id is None else str(job.id)
     company = escape(job.company)
     title = escape(job.title)
     location = escape(job.location)
     role = escape(job.role)
     source = escape(job.source)
     url = escape(job.url, quote=True)
+    checkbox = (
+        '<input class="delete-toggle" type="checkbox" disabled>'
+        if job.id is None
+        else (
+            '<input class="delete-toggle" type="checkbox" '
+            f'data-job-id="{escape(job_id, quote=True)}">'
+        )
+    )
     return (
         "<tr>"
+        f'<td class="select-col">{checkbox}</td>'
         f"<td>{company}</td>"
         f'<td><a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a></td>'
         f"<td>{location}</td>"

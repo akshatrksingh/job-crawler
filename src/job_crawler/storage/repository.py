@@ -417,6 +417,7 @@ class JobRepository:
         rows = self.connection.execute(
             f"""
             SELECT
+                id,
                 source,
                 source_id,
                 company,
@@ -446,9 +447,23 @@ class JobRepository:
                 first_seen_at=datetime.fromisoformat(row["first_seen_at"])
                 if row["first_seen_at"]
                 else None,
+                id=int(row["id"]),
             )
             for row in rows
         ]
+
+    def delete_jobs(self, job_ids: list[int]) -> int:
+        """Delete selected jobs from the local database."""
+        unique_ids = sorted({int(job_id) for job_id in job_ids if int(job_id) > 0})
+        if not unique_ids:
+            return 0
+        placeholders = ", ".join("?" for _ in unique_ids)
+        cursor = self.connection.execute(
+            f"DELETE FROM jobs WHERE id IN ({placeholders})",
+            unique_ids,
+        )
+        self.connection.commit()
+        return int(cursor.rowcount)
 
     def list_recent_crawl_runs(
         self,

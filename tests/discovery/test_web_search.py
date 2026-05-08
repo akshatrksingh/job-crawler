@@ -162,7 +162,11 @@ def test_fetch_search_result_urls_uses_tavily_when_key_is_set(monkeypatch) -> No
     assert calls == [("tavily", "ai engineer", 4, "tvly-test")]
 
 
-def test_fetch_search_result_urls_uses_duckduckgo_without_tavily_key(monkeypatch) -> None:
+def test_fetch_search_result_urls_uses_duckduckgo_without_tavily_key(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     calls = []
 
@@ -181,3 +185,25 @@ def test_fetch_search_result_urls_uses_duckduckgo_without_tavily_key(monkeypatch
         "https://jobs.lever.co/example-labs/123"
     ]
     assert calls == [("duckduckgo", "ai engineer", 4)]
+
+
+def test_fetch_search_result_urls_loads_tavily_key_from_local_env(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    (tmp_path / ".env").write_text("TAVILY_API_KEY=tvly-file\n", encoding="utf-8")
+    calls = []
+
+    def fake_tavily(query: str, limit: int, api_key: str) -> list[str]:
+        calls.append(("tavily", query, limit, api_key))
+        return ["https://jobs.ashbyhq.com/example-ai/role"]
+
+    monkeypatch.setattr(web_search, "_fetch_tavily_result_urls", fake_tavily)
+    monkeypatch.setattr(web_search, "_fetch_duckduckgo_result_urls", lambda **kwargs: [])
+
+    assert fetch_search_result_urls(query="ai engineer", limit=4) == [
+        "https://jobs.ashbyhq.com/example-ai/role"
+    ]
+    assert calls == [("tavily", "ai engineer", 4, "tvly-file")]

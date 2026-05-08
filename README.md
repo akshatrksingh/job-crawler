@@ -15,6 +15,8 @@ The pipeline will:
   companies are revisited less often and useful companies are revisited sooner.
 - Refresh ATS company boards in bounded parallel workers and show progress/ETA
   while the refresh is running.
+- Let you stage job deletions in the dashboard, confirm the count, then remove
+  those jobs from SQLite.
 
 Optional live web discovery can use Tavily. Put a Tavily key in `.env` as
 `TAVILY_API_KEY=...` to let refresh search for new Ashby, Greenhouse, and Lever
@@ -58,7 +60,7 @@ Useful knobs:
 PYTHONPATH=src uv run python -m job_crawler.cli serve \
   --port 8782 \
   --ats-workers 8 \
-  --source-timeout-seconds 35
+  --source-timeout-seconds 75
 ```
 
 ## Deployment

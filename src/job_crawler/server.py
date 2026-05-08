@@ -70,7 +70,7 @@ def run_dashboard_server(
     hn_limit: int = 80,
     yc_limit: int = 80,
     ats_workers: int = 8,
-    source_timeout_seconds: float = 35.0,
+    source_timeout_seconds: float = 75.0,
     auth_username: str | None = None,
     auth_password: str | None = None,
 ) -> None:
@@ -126,6 +126,9 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
             if self.path == "/api/refresh":
                 self._handle_refresh()
                 return
+            if self.path == "/api/jobs/delete":
+                self._handle_delete_jobs()
+                return
             self.send_error(HTTPStatus.NOT_FOUND)
 
         def _handle_refresh(self) -> None:
@@ -153,6 +156,34 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
             thread = threading.Thread(target=_run_refresh_background, args=(config,), daemon=True)
             thread.start()
             self._send_json(_get_progress(config), status=HTTPStatus.ACCEPTED)
+
+        def _handle_delete_jobs(self) -> None:
+            payload = self._read_json()
+            raw_ids = payload.get("job_ids", [])
+            if not isinstance(raw_ids, list):
+                self._send_json(
+                    {"ok": False, "deleted": 0, "error": "job_ids must be a list"},
+                    status=HTTPStatus.BAD_REQUEST,
+                )
+                return
+            job_ids: list[int] = []
+            for raw_id in raw_ids:
+                try:
+                    job_ids.append(int(raw_id))
+                except (TypeError, ValueError):
+                    continue
+            with open_database(config.db_path) as connection:
+                repo = JobRepository(connection)
+                deleted = repo.delete_jobs(job_ids)
+                html = render_dashboard(
+                    repo.list_recent_jobs(limit=config.candidate_limit),
+                    days=config.days,
+                    last_refresh_at=repo.get_app_state("last_refresh_at"),
+                    refresh_runs=repo.list_recent_crawl_runs(),
+                )
+                config.output_path.parent.mkdir(parents=True, exist_ok=True)
+                config.output_path.write_text(html, encoding="utf-8")
+            self._send_json({"ok": True, "deleted": deleted})
 
         def _read_json(self) -> dict[str, object]:
             length = int(self.headers.get("Content-Length", "0") or "0")

@@ -5,10 +5,12 @@ from __future__ import annotations
 import os
 import time
 from collections.abc import Callable, Iterable
+from pathlib import Path
 from urllib.parse import parse_qs, quote_plus, unquote, urlsplit
 
 import httpx
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 
 from job_crawler.discovery.queries import DEFAULT_WEB_DISCOVERY_QUERIES
 from job_crawler.discovery.sources import DiscoveredSource, extract_sources_from_urls
@@ -46,6 +48,7 @@ def discover_sources_from_web_search(
 
 def fetch_search_result_urls(*, query: str, limit: int = 8) -> list[str]:
     """Fetch result URLs using Tavily when configured, else DuckDuckGo HTML."""
+    load_dotenv(Path.cwd() / ".env")
     tavily_api_key = os.getenv("TAVILY_API_KEY", "").strip()
     if tavily_api_key:
         urls = _fetch_tavily_result_urls(

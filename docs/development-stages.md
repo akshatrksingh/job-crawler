@@ -303,6 +303,9 @@ Goal:
 - Adapt each stored ATS source's next crawl time from recent usefulness.
 - Clean up stale running crawl rows left behind by interrupted refreshes.
 - Show refresh progress and an ETA while the browser waits.
+- Keep Tavily discovery reliable by loading `.env` in the discovery layer.
+- Support staged multi-delete from the dashboard with confirmation before SQLite
+  rows are removed.
 - Avoid automatic scheduling unless the user explicitly asks for it.
 
 End-to-end test:
@@ -312,6 +315,9 @@ End-to-end test:
 - Confirm quiet sources are skipped until their next due time.
 - Confirm timed-out/stale source runs are marked failed.
 - Confirm the dashboard polls refresh progress.
+- Confirm local `.env` Tavily keys are picked up by discovery.
+- Confirm selected dashboard jobs are visually marked before deletion and only
+  deleted after confirmation.
 
 Push after:
 

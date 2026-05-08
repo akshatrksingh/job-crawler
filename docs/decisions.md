@@ -91,6 +91,8 @@ Discovery requirements:
   failing/404 sources back off more aggressively.
 - Refresh may crawl due ATS company boards in bounded parallel workers, with
   per-source timeouts and visible progress/ETA in the dashboard.
+- Per-source timeout defaults to 75 seconds. Lower values protect refreshes from
+  hanging, but can skip slow Lever/ATS boards too aggressively.
 
 ## Storage
 
@@ -131,6 +133,8 @@ Discovery requirements:
   broadly across the US and ranked with major-city preference.
 - The dashboard refresh button should start a background refresh and poll
   progress so the user can see current phase, completed source count, and ETA.
+- The dashboard may support manual multi-delete. Deletions must be staged in the
+  UI first, then confirmed in a modal before rows are deleted from SQLite.
 - Cloud hosting is optional/demo only unless the user explicitly accepts paid
   durable storage. Internet-reachable access should require Basic Auth.
 
@@ -419,3 +423,26 @@ rows from interrupted processes are cleaned up on the next refresh.
 Temporary or permanent: Permanent.
 Follow-up: Keep worker count conservative unless manual testing shows sources
 handle more parallelism comfortably.
+
+Decision changed: Manual job deletion.
+Previous plan: Keep all fetched jobs in SQLite indefinitely and only hide jobs
+outside the dashboard window.
+New plan: Allow the user to select multiple visible jobs, see them visually
+marked for deletion, and confirm before deleting them from SQLite.
+Reason: The personal dashboard should let the user clean up bad/noisy jobs
+without editing the database manually.
+Impact: Deletes are explicit and irreversible after confirmation. Until the
+modal confirmation is accepted, nothing is removed from the database.
+Temporary or permanent: Permanent.
+Follow-up: Add undo only if accidental deletes become a real problem.
+
+Decision changed: Tavily environment loading.
+Previous plan: Rely on the CLI/server startup path to load `.env`.
+New plan: Load `.env` inside web-search discovery before checking
+`TAVILY_API_KEY`.
+Reason: Refresh/discovery can be called from tests, scripts, or background code
+where the CLI parser may not have loaded environment variables first.
+Impact: Tavily is more reliable when a local `.env` has the key. If no key is
+present, DuckDuckGo fallback still runs.
+Temporary or permanent: Permanent.
+Follow-up: Surface the provider used by web discovery if debugging requires it.

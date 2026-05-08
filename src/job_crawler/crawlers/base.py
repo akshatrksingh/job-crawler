@@ -22,6 +22,7 @@ class JobPosting:
     description: str | None = None
     posted_at: datetime | None = None
     first_seen_at: datetime | None = None
+    id: int | None = None
 
 
 def clean_html(value: str | None) -> str | None:

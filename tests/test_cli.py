@@ -17,7 +17,7 @@ def test_serve_parser_defaults_to_localhost(monkeypatch, tmp_path) -> None:
     assert args.hn_limit == 80
     assert args.yc_limit == 80
     assert args.ats_workers == 8
-    assert args.source_timeout_seconds == 35.0
+    assert args.source_timeout_seconds == 75.0
     assert args.auth_username is None
     assert args.auth_password is None
 

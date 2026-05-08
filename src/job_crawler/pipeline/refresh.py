@@ -66,7 +66,7 @@ WEB_DISCOVERY_QUERY_BUDGET_KEY = "web_discovery_query_budget"
 WEB_DISCOVERY_MIN_QUERY_BUDGET = 10
 WEB_DISCOVERY_BACKOFF_STEP = 10
 DEFAULT_ATS_WORKERS = 8
-DEFAULT_SOURCE_TIMEOUT_SECONDS = 35.0
+DEFAULT_SOURCE_TIMEOUT_SECONDS = 75.0
 STALE_RUN_MINUTES = 90
 
 
@@ -156,6 +156,14 @@ def refresh_jobs(
         web_discovery_query_budget = _web_discovery_query_budget(
             repo,
             ceiling=web_discovery_queries,
+        )
+        _emit_progress(
+            progress_callback,
+            phase="web_discovery",
+            message=(
+                f"Running web discovery with up to {web_discovery_query_budget} "
+                "Tavily/DuckDuckGo queries..."
+            ),
         )
         web_discovery_result = _refresh_web_discovery(
             repo,
