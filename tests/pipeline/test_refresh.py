@@ -201,6 +201,7 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         hn_fetcher=fake_hn_fetcher,
         yc_fetcher=fake_yc_fetcher,
         web_discovery_fetcher=fake_web_discovery_fetcher,
+        seed_sources=(),
         ats_workers=1,
     )
 
@@ -268,6 +269,7 @@ def test_refresh_jobs_only_fetches_due_ats_sources(tmp_path) -> None:
         yc_fetcher=lambda limit: [],
         web_discovery_fetcher=lambda max_queries, results_per_query: [],
         ashby_fetcher=fake_ashby_fetcher,
+        seed_sources=(),
     )
 
     assert called == ["due-company"]
@@ -295,6 +297,7 @@ def test_refresh_jobs_records_timed_out_ats_source(tmp_path) -> None:
         yc_fetcher=lambda limit: [],
         web_discovery_fetcher=lambda max_queries, results_per_query: [],
         ashby_fetcher=slow_ashby_fetcher,
+        seed_sources=(),
     )
 
     assert result.errors == ["timed out after 0s"]
@@ -330,6 +333,7 @@ def test_refresh_jobs_backs_off_web_discovery_query_budget_on_error(tmp_path) ->
         hn_fetcher=lambda limit: [],
         yc_fetcher=lambda limit: [],
         web_discovery_fetcher=failing_web_discovery_fetcher,
+        seed_sources=(),
     )
 
     assert result.errors == ["tavily unavailable"]
@@ -356,9 +360,51 @@ def test_refresh_jobs_never_backs_off_web_discovery_below_ten(tmp_path) -> None:
         hn_fetcher=lambda limit: [],
         yc_fetcher=lambda limit: [],
         web_discovery_fetcher=lambda max_queries, results_per_query: [],
+        seed_sources=(),
     )
 
     assert result.errors == []
     with open_database(db_path) as connection:
         repo = JobRepository(connection)
         assert repo.get_app_state("web_discovery_query_budget") == "10"
+
+
+def test_refresh_jobs_upserts_seed_sources_before_fetching_due_ats_sources(tmp_path) -> None:
+    db_path = tmp_path / "jobs.sqlite"
+    output_path = tmp_path / "site" / "index.html"
+    seed_sources = (
+        DiscoveredSource(
+            source_type="ashby",
+            slug="sf-ai-startup",
+            base_url="https://jobs.ashbyhq.com/sf-ai-startup",
+            discovered_from="unit-test-seed",
+            result_url="https://jobs.ashbyhq.com/sf-ai-startup",
+        ),
+    )
+    called = []
+
+    def fake_ashby_fetcher(slug: str, company: str, limit: int):
+        called.append(slug)
+        return [make_job("ashby", slug, "AI Engineer")]
+
+    result = refresh_jobs(
+        db_path=db_path,
+        output_path=output_path,
+        github_boards_fetcher=lambda limit: [],
+        hn_fetcher=lambda limit: [],
+        yc_fetcher=lambda limit: [],
+        web_discovery_fetcher=lambda max_queries, results_per_query: [],
+        ashby_fetcher=fake_ashby_fetcher,
+        seed_sources=seed_sources,
+        max_sources=1,
+    )
+
+    assert called == ["sf-ai-startup"]
+    assert [source.source for source in result.sources[:2]] == [
+        "curated_seed_sources:sf_ai_startups",
+        "web_search_discovery",
+    ]
+    assert any(source.source == "ashby:sf-ai-startup" for source in result.sources)
+    with open_database(db_path) as connection:
+        repo = JobRepository(connection)
+        assert repo.list_sources(source_type="ashby")[0]["slug"] == "sf-ai-startup"

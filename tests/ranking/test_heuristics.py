@@ -41,6 +41,16 @@ def test_rank_job_prefers_us_city_over_generic_remote_when_role_fit_matches() ->
     assert seattle.location_tier == LocationTier.MAJOR_US_CITY
 
 
+def test_rank_job_gives_sf_bay_area_a_small_extra_boost() -> None:
+    sf = rank_job(make_job("AI Engineer", "San Francisco, CA", "Entry level role"))
+    nyc = rank_job(make_job("AI Engineer", "New York, NY", "Entry level role"))
+    palo_alto = rank_job(make_job("AI Engineer", "Palo Alto, CA", "Entry level role"))
+    seattle = rank_job(make_job("AI Engineer", "Seattle, WA", "Entry level role"))
+
+    assert sf.score == nyc.score + 2
+    assert palo_alto.score == seattle.score + 2
+
+
 def test_rank_job_excludes_senior_staff_and_lead_roles() -> None:
     senior = make_job("Senior Machine Learning Engineer", "New York, NY")
     staff = make_job("Staff AI Engineer", "San Francisco, CA")

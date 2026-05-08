@@ -1,4 +1,8 @@
-from job_crawler.discovery import DEFAULT_WEB_DISCOVERY_QUERIES, build_discovery_queries
+from job_crawler.discovery import (
+    DEFAULT_WEB_DISCOVERY_QUERIES,
+    SF_AI_STARTUP_WEB_DISCOVERY_QUERIES,
+    build_discovery_queries,
+)
 
 
 def test_build_discovery_queries_is_bounded_and_google_style() -> None:
@@ -51,3 +55,12 @@ def test_default_web_discovery_queries_cover_roles_locations_and_experience() ->
     assert '"Austin"' in joined
     assert '"Chicago"' in joined
     assert '"Denver"' in joined
+
+
+def test_default_web_discovery_queries_start_with_sf_ai_startup_queries() -> None:
+    assert DEFAULT_WEB_DISCOVERY_QUERIES[: len(SF_AI_STARTUP_WEB_DISCOVERY_QUERIES)] == (
+        SF_AI_STARTUP_WEB_DISCOVERY_QUERIES
+    )
+    assert DEFAULT_WEB_DISCOVERY_QUERIES[0] == (
+        'site:jobs.ashbyhq.com "ai engineer" "San Francisco"'
+    )

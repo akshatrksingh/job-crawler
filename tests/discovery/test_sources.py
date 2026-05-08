@@ -1,4 +1,8 @@
-from job_crawler.discovery import extract_source_from_url, extract_sources_from_urls
+from job_crawler.discovery import (
+    SF_AI_STARTUP_SEED_SOURCES,
+    extract_source_from_url,
+    extract_sources_from_urls,
+)
 from job_crawler.storage import JobRepository, open_database
 
 
@@ -101,3 +105,14 @@ def test_store_discovered_sources_in_sqlite() -> None:
             ("greenhouse", "acme"),
         ]
         assert rows[0]["discovered_from"] == "unit-test-query"
+
+
+def test_sf_ai_startup_seed_sources_are_unique_ashby_sources() -> None:
+    keys = [(source.source_type, source.slug) for source in SF_AI_STARTUP_SEED_SOURCES]
+
+    assert len(SF_AI_STARTUP_SEED_SOURCES) >= 30
+    assert len(keys) == len(set(keys))
+    assert all(source.source_type == "ashby" for source in SF_AI_STARTUP_SEED_SOURCES)
+    assert ("ashby", "eloquentai") in keys
+    assert ("ashby", "mercator") in keys
+    assert ("ashby", "pytho-ai") in keys

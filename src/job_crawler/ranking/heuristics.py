@@ -28,6 +28,21 @@ PRIMARY_LOCATION_KEYWORDS = (
     "bay area",
 )
 
+SF_BAY_LOCATION_KEYWORDS = (
+    "san francisco",
+    "sf",
+    "bay area",
+    "palo alto",
+    "mountain view",
+    "sunnyvale",
+    "san jose",
+    "menlo park",
+    "redwood city",
+    "south san francisco",
+    "berkeley",
+    "oakland",
+)
+
 MAJOR_US_CITY_KEYWORDS = (
     "seattle",
     "seatle",
@@ -479,6 +494,8 @@ def rank_job(job: JobPosting) -> RankedJob:
         score += 4
     elif tier == LocationTier.GENERIC_REMOTE:
         score += 1
+    if is_sf_bay_area_location(job.location):
+        score += 2
     if excluded:
         score -= 100
 
@@ -581,6 +598,14 @@ def location_tier(location: str | None) -> LocationTier:
     if any(token in value for token in ("united states", "usa", " us", ", us")):
         return LocationTier.OTHER_US
     return LocationTier.NON_US_OR_UNKNOWN
+
+
+def is_sf_bay_area_location(location: str | None) -> bool:
+    """Return true for SF and nearby Bay Area locations."""
+    if not location:
+        return False
+    value = f" {location.lower()} "
+    return any(keyword in value for keyword in SF_BAY_LOCATION_KEYWORDS)
 
 
 def is_us_role(job: JobPosting) -> bool:

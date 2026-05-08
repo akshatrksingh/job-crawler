@@ -98,18 +98,39 @@ DEFAULT_WEB_DISCOVERY_SITES = (
 
 DEFAULT_WEB_DISCOVERY_QUERY_LIMIT = 100
 
+SF_AI_STARTUP_WEB_DISCOVERY_QUERIES = (
+    'site:jobs.ashbyhq.com "ai engineer" "San Francisco"',
+    'site:jobs.ashbyhq.com "applied ai engineer" "San Francisco"',
+    'site:jobs.ashbyhq.com "machine learning engineer" "San Francisco"',
+    'site:jobs.ashbyhq.com "ml engineer" "San Francisco"',
+    'site:jobs.ashbyhq.com "llm engineer" "San Francisco"',
+    'site:jobs.ashbyhq.com "founding engineer" "San Francisco"',
+    'site:jobs.ashbyhq.com "research engineer" "San Francisco"',
+    'site:jobs.ashbyhq.com "computer vision" "San Francisco"',
+    'site:jobs.ashbyhq.com "robotics engineer" "San Francisco"',
+    'site:jobs.ashbyhq.com "defense tech" "San Francisco"',
+    'site:jobs.ashbyhq.com "deep tech" "San Francisco"',
+    'site:jobs.ashbyhq.com "ai engineer" "Bay Area"',
+    'site:jobs.ashbyhq.com "machine learning engineer" "Bay Area"',
+    'site:jobs.ashbyhq.com "founding engineer" "Bay Area"',
+)
+
 
 def _build_default_web_discovery_queries(
     limit: int = DEFAULT_WEB_DISCOVERY_QUERY_LIMIT,
 ) -> tuple[str, ...]:
-    queries: list[str] = []
-    for index in range(limit):
+    queries = list(SF_AI_STARTUP_WEB_DISCOVERY_QUERIES[:limit])
+    index = 0
+    while len(queries) < limit:
         role = DEFAULT_WEB_DISCOVERY_ROLES[index % len(DEFAULT_WEB_DISCOVERY_ROLES)]
         location = DEFAULT_WEB_DISCOVERY_LOCATIONS[
             (index // len(DEFAULT_WEB_DISCOVERY_ROLES)) % len(DEFAULT_WEB_DISCOVERY_LOCATIONS)
         ]
         site_query = DEFAULT_WEB_DISCOVERY_SITES[index % len(DEFAULT_WEB_DISCOVERY_SITES)]
-        queries.append(f'{site_query} "{role}" "{location}"')
+        query = f'{site_query} "{role}" "{location}"'
+        if query not in queries:
+            queries.append(query)
+        index += 1
     return tuple(queries)
 
 

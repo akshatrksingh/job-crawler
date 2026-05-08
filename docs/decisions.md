@@ -62,6 +62,10 @@ Discovery requirements:
   fallback.
 - Large hardcoded company lists are allowed only as fallback seed data, not as
   the primary discovery strategy.
+- Keep a small curated SF/Bay Area AI startup seed list as a head start for
+  Ashby-heavy startup discovery. This should supplement Tavily/dynamic
+  discovery, not replace it, and quiet or broken seeds should be handled by the
+  adaptive source scheduler.
 
 ## Rate Limits and Cost Control
 
@@ -111,6 +115,9 @@ Discovery requirements:
 - Use zero-cost deterministic heuristics for filtering and ranking.
 - Prioritize role match, early-career fit, location priority, source recency, and
   dedupe state.
+- Give SF/Bay Area jobs a small extra ranking boost, especially useful for
+  startup-heavy AI and deep-tech roles, while still keeping NYC and other major
+  US cities in the feed.
 - Penalize or exclude senior, staff, principal, lead, manager, director, and
   architect roles by default.
 - Ranking is used to order the dashboard, not to make final application

@@ -17,7 +17,12 @@ from job_crawler.crawlers.hn import fetch_hn_who_is_hiring_jobs
 from job_crawler.crawlers.lever import fetch_lever_jobs
 from job_crawler.crawlers.yc import fetch_yc_jobs
 from job_crawler.dashboard import write_dashboard
-from job_crawler.discovery import discover_sources_from_web_search, extract_sources_from_urls
+from job_crawler.discovery import (
+    SF_AI_STARTUP_SEED_SOURCES,
+    DiscoveredSource,
+    discover_sources_from_web_search,
+    extract_sources_from_urls,
+)
 from job_crawler.storage import JobRepository, open_database
 
 JobFetcher = Callable[..., list[JobPosting]]
@@ -138,6 +143,7 @@ def refresh_jobs(
     hn_fetcher: HnFetcher = fetch_hn_who_is_hiring_jobs,
     yc_fetcher: JobFetcher = fetch_yc_jobs,
     web_discovery_fetcher: WebDiscoveryFetcher = discover_sources_from_web_search,
+    seed_sources: tuple[DiscoveredSource, ...] = SF_AI_STARTUP_SEED_SOURCES,
     ats_workers: int = DEFAULT_ATS_WORKERS,
     source_timeout_seconds: float = DEFAULT_SOURCE_TIMEOUT_SECONDS,
     progress_callback: ProgressCallback | None = None,
@@ -152,6 +158,17 @@ def refresh_jobs(
                 progress_callback,
                 phase="cleanup",
                 message=f"Cleaned up {stale_runs} stale crawl run(s).",
+            )
+        if seed_sources:
+            seed_result = _refresh_seed_sources(repo, sources=seed_sources)
+            source_results.append(seed_result)
+            _emit_progress(
+                progress_callback,
+                phase="source_seeds",
+                message=(
+                    f"Loaded {seed_result.seen} curated SF/Bay AI startup "
+                    f"source seed(s); {seed_result.inserted} were new."
+                ),
             )
         web_discovery_query_budget = _web_discovery_query_budget(
             repo,
@@ -527,6 +544,31 @@ def _refresh_web_discovery(
             inserted=sources_inserted,
             error=str(exc),
         )
+
+
+def _refresh_seed_sources(
+    repo: JobRepository,
+    *,
+    sources: tuple[DiscoveredSource, ...],
+) -> SourceRefreshResult:
+    crawl_run_id = repo.start_crawl_run(source_type="curated_seed_sources")
+    sources_seen = len(sources)
+    before = _source_keys(repo)
+    for source in sources:
+        repo.upsert_discovered_source(source)
+    after = _source_keys(repo)
+    sources_inserted = len(after - before)
+    repo.finish_crawl_run(
+        crawl_run_id=crawl_run_id,
+        status="succeeded",
+        jobs_seen=sources_seen,
+        jobs_inserted=sources_inserted,
+    )
+    return SourceRefreshResult(
+        source="curated_seed_sources:sf_ai_startups",
+        seen=sources_seen,
+        inserted=sources_inserted,
+    )
 
 
 def _source_keys(repo: JobRepository) -> set[tuple[str, str]]:

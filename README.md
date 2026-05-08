@@ -27,6 +27,11 @@ or empty runs, down to a floor of 10. Without that key, refresh stays zero-cost
 and uses the built-in job boards, HN, YC, stored ATS boards, and a DuckDuckGo
 HTML fallback.
 
+Refresh also keeps a curated SF/Bay Area AI startup seed list for Ashby boards.
+This is only a head start for startup-heavy discovery; the adaptive scheduler
+backs off quiet or broken company boards, and dynamic discovery can still add
+new Ashby, Greenhouse, and Lever sources over time.
+
 No auto-apply behavior belongs in this project.
 
 ## Project Layout

@@ -126,6 +126,8 @@ Goal:
 - Prefer optional Tavily live search over direct Google scraping.
 - Keep a zero-cost fallback through DuckDuckGo HTML and job-board-derived ATS
   links.
+- Keep a curated SF/Bay Area AI startup seed list as a fallback/head-start layer
+  for Ashby-heavy startup discovery.
 - Keep Tavily discovery around 100 targeted searches by default.
 - Back off the web-discovery query budget by 10 after failures or empty runs,
   down to a floor of 10, and recover by 10 after successful discovery.
@@ -135,6 +137,8 @@ End-to-end test:
 
 - Generate a limited query set.
 - Confirm slugs are extracted, deduped, and tied back to their source query.
+- Confirm curated startup seed sources are upserted before due ATS boards are
+  crawled.
 - Run a no-network smoke test with representative URLs.
 - With `TAVILY_API_KEY` set, run one bounded refresh and confirm new discovered
   Ashby, Greenhouse, or Lever sources are stored before ATS crawling.
