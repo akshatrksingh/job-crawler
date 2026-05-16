@@ -309,6 +309,8 @@ class JobRepository:
     def insert_job(self, job: JobPosting, *, raw: dict[str, Any] | None = None) -> JobInsertResult:
         """Insert a job if it is new, otherwise refresh its last-seen timestamp."""
         fingerprint = build_job_fingerprint(job)
+        if self._is_dismissed_job(job, fingerprint=fingerprint):
+            return JobInsertResult(job_id=0, inserted=False)
         existing_id = self._find_semantic_duplicate(job)
         if existing_id is not None:
             self.connection.execute(
@@ -400,6 +402,18 @@ class JobRepository:
         ).fetchone()
         return int(row["id"]) if row else None
 
+    def _is_dismissed_job(self, job: JobPosting, *, fingerprint: str) -> bool:
+        row = self.connection.execute(
+            """
+            SELECT 1
+            FROM dismissed_jobs
+            WHERE fingerprint = ? OR (source = ? AND source_id = ?)
+            LIMIT 1
+            """,
+            (fingerprint, job.source, job.source_id),
+        ).fetchone()
+        return row is not None
+
     def list_recent_jobs(
         self,
         *,
@@ -453,11 +467,43 @@ class JobRepository:
         ]
 
     def delete_jobs(self, job_ids: list[int]) -> int:
-        """Delete selected jobs from the local database."""
+        """Dismiss selected jobs and remove them from the active dashboard list."""
         unique_ids = sorted({int(job_id) for job_id in job_ids if int(job_id) > 0})
         if not unique_ids:
             return 0
         placeholders = ", ".join("?" for _ in unique_ids)
+        rows = self.connection.execute(
+            f"""
+            SELECT source, source_id, fingerprint, company, title, location, url
+            FROM jobs
+            WHERE id IN ({placeholders})
+            """,
+            unique_ids,
+        ).fetchall()
+        for row in rows:
+            self.connection.execute(
+                """
+                INSERT OR IGNORE INTO dismissed_jobs (
+                    source,
+                    source_id,
+                    fingerprint,
+                    company,
+                    title,
+                    location,
+                    url
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["source"],
+                    row["source_id"],
+                    row["fingerprint"],
+                    row["company"],
+                    row["title"],
+                    row["location"],
+                    row["url"],
+                ),
+            )
         cursor = self.connection.execute(
             f"DELETE FROM jobs WHERE id IN ({placeholders})",
             unique_ids,
@@ -529,7 +575,14 @@ class JobRepository:
 
     def count_rows(self, table: str) -> int:
         """Count rows in a known project table."""
-        allowed_tables = {"sources", "crawl_runs", "jobs", "app_state", "schema_migrations"}
+        allowed_tables = {
+            "sources",
+            "crawl_runs",
+            "jobs",
+            "dismissed_jobs",
+            "app_state",
+            "schema_migrations",
+        }
         if table not in allowed_tables:
             msg = f"Unsupported table: {table}"
             raise ValueError(msg)

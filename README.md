@@ -5,7 +5,7 @@ Personal job crawling pipeline for finding ML engineer, AI engineer, agentic AI,
 The pipeline will:
 
 - Discover companies dynamically from search results instead of using a hardcoded company list.
-- Crawl Greenhouse, Lever, Ashby, Hacker News Who is Hiring, and YC Work at a Startup.
+- Crawl Greenhouse, Lever, Ashby, curated job boards, and YC Work at a Startup.
 - Store jobs and crawl metadata in SQLite.
 - Deduplicate jobs so previously seen roles are not shown again.
 - Filter and rank jobs with zero-cost heuristics.
@@ -16,18 +16,19 @@ The pipeline will:
 - Refresh ATS company boards in bounded parallel workers and show progress/ETA
   while the refresh is running.
 - Let you stage job deletions in the dashboard, confirm the count, then remove
-  those jobs from SQLite.
+  those jobs from the active dashboard while keeping dismissal markers so they
+  do not reappear on the next refresh.
 
 Optional live web discovery can use Tavily. Put a Tavily key in `.env` as
-`TAVILY_API_KEY=...` to let refresh search for new Ashby, Greenhouse, and Lever
-company boards before crawling. Discovery runs about 100 bounded searches across
-AI, ML, SWE, data, founding/backend/full-stack role groups, early-career wording,
-and major US cities. The query budget backs off by 10 after discovery failures
-or empty runs, down to a floor of 10. Without that key, refresh stays zero-cost
-and uses the built-in job boards, HN, YC, stored ATS boards, and a DuckDuckGo
-HTML fallback.
+`TAVILY_API_KEY=...`, then enable the Tavily search toggle in the dashboard before
+refreshing to search for new Ashby, Greenhouse, and Lever company boards before
+crawling. Discovery runs about 100 bounded searches across AI, ML, SWE, data,
+founding/backend/full-stack/member-of-technical-staff role groups and major US
+cities. The query budget backs off by 10 after discovery failures or empty runs,
+down to a floor of 10. Without the toggle, refresh stays zero-cost and uses the
+built-in job boards, YC, stored ATS boards, and a DuckDuckGo HTML fallback.
 
-Refresh also keeps a curated SF/Bay Area AI startup seed list for Ashby boards.
+Refresh also keeps a curated AI startup seed list for Ashby and Greenhouse boards.
 This is only a head start for startup-heavy discovery; the adaptive scheduler
 backs off quiet or broken company boards, and dynamic discovery can still add
 new Ashby, Greenhouse, and Lever sources over time.

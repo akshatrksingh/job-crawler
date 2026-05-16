@@ -14,7 +14,6 @@ def test_serve_parser_defaults_to_localhost(monkeypatch, tmp_path) -> None:
     assert args.days == 14
     assert args.ashby_limit == 10
     assert args.github_jobs_limit == 250
-    assert args.hn_limit == 80
     assert args.yc_limit == 80
     assert args.ats_workers == 8
     assert args.source_timeout_seconds == 75.0

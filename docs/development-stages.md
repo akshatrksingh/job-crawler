@@ -115,7 +115,7 @@ git push
 ## Stage 4: Dynamic Company Discovery
 
 Status: Done for provider-neutral extraction. Optional Tavily live search is
-available when `TAVILY_API_KEY` is configured.
+available when `TAVILY_API_KEY` is configured and enabled from the dashboard.
 
 Goal:
 
@@ -126,8 +126,9 @@ Goal:
 - Prefer optional Tavily live search over direct Google scraping.
 - Keep a zero-cost fallback through DuckDuckGo HTML and job-board-derived ATS
   links.
-- Keep a curated SF/Bay Area AI startup seed list as a fallback/head-start layer
-  for Ashby-heavy startup discovery.
+- Keep a curated AI startup seed list as a fallback/head-start layer for
+  Ashby- and Greenhouse-heavy startup discovery across SF, NYC, Boston, and
+  other major US hubs.
 - Keep Tavily discovery around 100 targeted searches by default.
 - Back off the web-discovery query budget by 10 after failures or empty runs,
   down to a floor of 10, and recover by 10 after successful discovery.
@@ -140,8 +141,9 @@ End-to-end test:
 - Confirm curated startup seed sources are upserted before due ATS boards are
   crawled.
 - Run a no-network smoke test with representative URLs.
-- With `TAVILY_API_KEY` set, run one bounded refresh and confirm new discovered
-  Ashby, Greenhouse, or Lever sources are stored before ATS crawling.
+- With `TAVILY_API_KEY` set and the dashboard toggle enabled, run one bounded
+  refresh and confirm new discovered Ashby, Greenhouse, or Lever sources are
+  stored before ATS crawling.
 
 Push after:
 
@@ -303,13 +305,15 @@ Goal:
 
 - Keep the server refresh button as the primary runner.
 - Make refresh status clear when Tavily/web discovery fails or hits limits.
+- Keep Tavily behind a frontend toggle so a configured key is not used by
+  default.
 - Run due ATS company-board crawls in bounded parallel workers.
 - Adapt each stored ATS source's next crawl time from recent usefulness.
 - Clean up stale running crawl rows left behind by interrupted refreshes.
 - Show refresh progress and an ETA while the browser waits.
 - Keep Tavily discovery reliable by loading `.env` in the discovery layer.
-- Support staged multi-delete from the dashboard with confirmation before SQLite
-  rows are removed.
+- Support staged multi-delete from the dashboard with confirmation before active
+  job rows are removed and dismissal markers are saved.
 - Avoid automatic scheduling unless the user explicitly asks for it.
 
 End-to-end test:
@@ -320,8 +324,11 @@ End-to-end test:
 - Confirm timed-out/stale source runs are marked failed.
 - Confirm the dashboard polls refresh progress.
 - Confirm local `.env` Tavily keys are picked up by discovery.
-- Confirm selected dashboard jobs are visually marked before deletion and only
-  deleted after confirmation.
+- Confirm Tavily is used only when the dashboard refresh payload enables it.
+- Confirm selected dashboard jobs are visually marked before deletion, only
+  deleted after confirmation, and treated as already seen on later refreshes.
+- Confirm the page-wise delete control stages the visible page using the same
+  saved deletion flow.
 
 Push after:
 

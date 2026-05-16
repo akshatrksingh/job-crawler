@@ -39,7 +39,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum jobs to fetch per Ashby, Greenhouse, or Lever company board",
     )
     serve.add_argument("--github-jobs-limit", type=int, default=250)
-    serve.add_argument("--hn-limit", type=int, default=80)
     serve.add_argument("--yc-limit", type=int, default=80)
     serve.add_argument("--ats-workers", type=int, default=8)
     serve.add_argument("--source-timeout-seconds", type=float, default=75.0)
@@ -87,7 +86,6 @@ def main(argv: list[str] | None = None) -> None:
             candidate_limit=args.candidate_limit,
             ashby_limit=args.ashby_limit,
             github_jobs_limit=args.github_jobs_limit,
-            hn_limit=args.hn_limit,
             yc_limit=args.yc_limit,
             ats_workers=args.ats_workers,
             source_timeout_seconds=args.source_timeout_seconds,

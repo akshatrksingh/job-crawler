@@ -28,7 +28,6 @@ class DashboardServerConfig:
         candidate_limit: int,
         ashby_limit: int,
         github_jobs_limit: int,
-        hn_limit: int,
         yc_limit: int,
         ats_workers: int,
         source_timeout_seconds: float,
@@ -41,7 +40,6 @@ class DashboardServerConfig:
         self.candidate_limit = candidate_limit
         self.ashby_limit = ashby_limit
         self.github_jobs_limit = github_jobs_limit
-        self.hn_limit = hn_limit
         self.yc_limit = yc_limit
         self.ats_workers = ats_workers
         self.source_timeout_seconds = source_timeout_seconds
@@ -67,7 +65,6 @@ def run_dashboard_server(
     candidate_limit: int = 10_000,
     ashby_limit: int = 10,
     github_jobs_limit: int = 250,
-    hn_limit: int = 80,
     yc_limit: int = 80,
     ats_workers: int = 8,
     source_timeout_seconds: float = 75.0,
@@ -82,7 +79,6 @@ def run_dashboard_server(
         candidate_limit=candidate_limit,
         ashby_limit=ashby_limit,
         github_jobs_limit=github_jobs_limit,
-        hn_limit=hn_limit,
         yc_limit=yc_limit,
         ats_workers=ats_workers,
         source_timeout_seconds=source_timeout_seconds,
@@ -132,6 +128,8 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
             self.send_error(HTTPStatus.NOT_FOUND)
 
         def _handle_refresh(self) -> None:
+            payload = self._read_json()
+            use_tavily = bool(payload.get("use_tavily", False))
             if not config.refresh_lock.acquire(blocking=False):
                 self._send_json(_get_progress(config))
                 return
@@ -153,7 +151,11 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
                 sources=[],
                 errors=[],
             )
-            thread = threading.Thread(target=_run_refresh_background, args=(config,), daemon=True)
+            thread = threading.Thread(
+                target=_run_refresh_background,
+                args=(config, use_tavily),
+                daemon=True,
+            )
             thread.start()
             self._send_json(_get_progress(config), status=HTTPStatus.ACCEPTED)
 
@@ -234,7 +236,7 @@ def _build_handler(config: DashboardServerConfig) -> type[BaseHTTPRequestHandler
     return DashboardRequestHandler
 
 
-def _run_refresh_background(config: DashboardServerConfig) -> None:
+def _run_refresh_background(config: DashboardServerConfig, use_tavily: bool = False) -> None:
     try:
         result = refresh_jobs(
             db_path=config.db_path,
@@ -243,8 +245,8 @@ def _run_refresh_background(config: DashboardServerConfig) -> None:
             candidate_limit=config.candidate_limit,
             ashby_limit=config.ashby_limit,
             github_jobs_limit=config.github_jobs_limit,
-            hn_limit=config.hn_limit,
             yc_limit=config.yc_limit,
+            use_tavily=use_tavily,
             ats_workers=config.ats_workers,
             source_timeout_seconds=config.source_timeout_seconds,
             progress_callback=lambda payload: _set_progress(config, **payload),

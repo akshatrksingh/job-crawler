@@ -26,6 +26,7 @@ def discover_sources_from_web_search(
     max_queries: int = 20,
     results_per_query: int = 8,
     max_seconds: int = 120,
+    use_tavily: bool = False,
     fetcher: SearchFetcher | None = None,
 ) -> list[DiscoveredSource]:
     """Run bounded web searches and extract supported ATS sources."""
@@ -36,7 +37,7 @@ def discover_sources_from_web_search(
         if time.monotonic() - started >= max_seconds:
             break
         try:
-            urls = search(query=query, limit=results_per_query)
+            urls = search(query=query, limit=results_per_query, use_tavily=use_tavily)
         except httpx.HTTPError as exc:
             if _is_blocking_tavily_error(exc):
                 raise
@@ -46,11 +47,16 @@ def discover_sources_from_web_search(
     return list(discovered.values())
 
 
-def fetch_search_result_urls(*, query: str, limit: int = 8) -> list[str]:
-    """Fetch result URLs using Tavily when configured, else DuckDuckGo HTML."""
+def fetch_search_result_urls(
+    *,
+    query: str,
+    limit: int = 8,
+    use_tavily: bool = False,
+) -> list[str]:
+    """Fetch result URLs using Tavily only when explicitly enabled."""
     load_dotenv(Path.cwd() / ".env")
     tavily_api_key = os.getenv("TAVILY_API_KEY", "").strip()
-    if tavily_api_key:
+    if use_tavily and tavily_api_key:
         urls = _fetch_tavily_result_urls(
             query=query,
             limit=limit,

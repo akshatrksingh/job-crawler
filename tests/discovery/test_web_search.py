@@ -51,8 +51,9 @@ def test_parse_tavily_result_urls_extracts_supported_ats_links() -> None:
 
 
 def test_discover_sources_from_web_search_dedupes_sources() -> None:
-    def fake_fetcher(query: str, limit: int):
+    def fake_fetcher(query: str, limit: int, use_tavily: bool):
         assert limit == 2
+        assert use_tavily is False
         return [
             "https://jobs.ashbyhq.com/example-ai/one",
             "https://jobs.ashbyhq.com/example-ai/two",
@@ -73,7 +74,7 @@ def test_discover_sources_from_web_search_dedupes_sources() -> None:
 
 
 def test_discover_sources_from_web_search_skips_query_http_errors() -> None:
-    def fake_fetcher(query: str, limit: int):
+    def fake_fetcher(query: str, limit: int, use_tavily: bool):
         if query == "bad":
             request = httpx.Request("GET", "https://example.com")
             response = httpx.Response(429)
@@ -93,7 +94,7 @@ def test_discover_sources_from_web_search_skips_query_http_errors() -> None:
 
 
 def test_discover_sources_from_web_search_surfaces_tavily_http_errors() -> None:
-    def fake_fetcher(query: str, limit: int):
+    def fake_fetcher(query: str, limit: int, use_tavily: bool):
         request = httpx.Request("POST", "https://api.tavily.com/search")
         response = httpx.Response(401)
         raise httpx.HTTPStatusError("bad key", request=request, response=response)
@@ -108,7 +109,7 @@ def test_discover_sources_from_web_search_surfaces_tavily_http_errors() -> None:
 
 
 def test_discover_sources_from_web_search_skips_tavily_timeouts() -> None:
-    def fake_fetcher(query: str, limit: int):
+    def fake_fetcher(query: str, limit: int, use_tavily: bool):
         request = httpx.Request("POST", "https://api.tavily.com/search")
         raise httpx.ConnectTimeout("connect timed out", request=request)
 
@@ -125,7 +126,7 @@ def test_discover_sources_from_web_search_skips_tavily_timeouts() -> None:
 def test_discover_sources_from_web_search_honors_total_time_budget() -> None:
     calls = []
 
-    def fake_fetcher(query: str, limit: int):
+    def fake_fetcher(query: str, limit: int, use_tavily: bool):
         calls.append(query)
         return ["https://jobs.ashbyhq.com/example-ai/one"]
 
@@ -141,7 +142,7 @@ def test_discover_sources_from_web_search_honors_total_time_budget() -> None:
     assert calls == []
 
 
-def test_fetch_search_result_urls_uses_tavily_when_key_is_set(monkeypatch) -> None:
+def test_fetch_search_result_urls_uses_tavily_when_enabled_and_key_is_set(monkeypatch) -> None:
     monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
     calls = []
 
@@ -156,10 +157,33 @@ def test_fetch_search_result_urls_uses_tavily_when_key_is_set(monkeypatch) -> No
     monkeypatch.setattr(web_search, "_fetch_tavily_result_urls", fake_tavily)
     monkeypatch.setattr(web_search, "_fetch_duckduckgo_result_urls", fake_duckduckgo)
 
-    assert fetch_search_result_urls(query="ai engineer", limit=4) == [
+    assert fetch_search_result_urls(query="ai engineer", limit=4, use_tavily=True) == [
         "https://jobs.ashbyhq.com/example-ai/role"
     ]
     assert calls == [("tavily", "ai engineer", 4, "tvly-test")]
+
+
+def test_fetch_search_result_urls_uses_duckduckgo_when_tavily_is_not_enabled(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
+    calls = []
+
+    def fake_tavily(query: str, limit: int, api_key: str) -> list[str]:
+        calls.append(("tavily", query, limit, api_key))
+        return []
+
+    def fake_duckduckgo(query: str, limit: int) -> list[str]:
+        calls.append(("duckduckgo", query, limit))
+        return ["https://jobs.ashbyhq.com/example-ai/role"]
+
+    monkeypatch.setattr(web_search, "_fetch_tavily_result_urls", fake_tavily)
+    monkeypatch.setattr(web_search, "_fetch_duckduckgo_result_urls", fake_duckduckgo)
+
+    assert fetch_search_result_urls(query="ai engineer", limit=4) == [
+        "https://jobs.ashbyhq.com/example-ai/role"
+    ]
+    assert calls == [("duckduckgo", "ai engineer", 4)]
 
 
 def test_fetch_search_result_urls_uses_duckduckgo_without_tavily_key(
@@ -203,7 +227,7 @@ def test_fetch_search_result_urls_loads_tavily_key_from_local_env(
     monkeypatch.setattr(web_search, "_fetch_tavily_result_urls", fake_tavily)
     monkeypatch.setattr(web_search, "_fetch_duckduckgo_result_urls", lambda **kwargs: [])
 
-    assert fetch_search_result_urls(query="ai engineer", limit=4) == [
+    assert fetch_search_result_urls(query="ai engineer", limit=4, use_tavily=True) == [
         "https://jobs.ashbyhq.com/example-ai/role"
     ]
     assert calls == [("tavily", "ai engineer", 4, "tvly-file")]

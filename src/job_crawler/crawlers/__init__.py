@@ -9,12 +9,6 @@ from job_crawler.crawlers.github_boards import (
     parse_markdown_board,
 )
 from job_crawler.crawlers.greenhouse import fetch_greenhouse_jobs, parse_greenhouse_jobs
-from job_crawler.crawlers.hn import (
-    fetch_hn_who_is_hiring_jobs,
-    find_latest_hiring_thread_id,
-    parse_hn_comment,
-    parse_hn_thread,
-)
 from job_crawler.crawlers.lever import fetch_lever_jobs, parse_lever_jobs
 from job_crawler.crawlers.yc import fetch_yc_jobs, parse_yc_jobs_html
 
@@ -23,14 +17,10 @@ __all__ = [
     "fetch_greenhouse_jobs",
     "fetch_default_github_board_jobs",
     "fetch_github_board_jobs",
-    "fetch_hn_who_is_hiring_jobs",
     "fetch_lever_jobs",
     "fetch_yc_jobs",
-    "find_latest_hiring_thread_id",
     "parse_ashby_jobs",
     "parse_greenhouse_jobs",
-    "parse_hn_comment",
-    "parse_hn_thread",
     "parse_html_board",
     "parse_lever_jobs",
     "parse_markdown_board",

@@ -36,7 +36,7 @@ For local-only use, `.env` can stay like:
 
 ```text
 JOB_CRAWLER_DB_PATH=data/job_crawler.sqlite
-TAVILY_API_KEY=<optional Tavily key for live ATS discovery>
+TAVILY_API_KEY=<optional Tavily key for dashboard-enabled ATS discovery>
 ```
 
 For any internet-reachable service, also set:
@@ -50,8 +50,8 @@ Without `JOB_CRAWLER_AUTH_USERNAME` and `JOB_CRAWLER_AUTH_PASSWORD`, the dashboa
 open to anyone who can reach the deployed URL.
 
 Without `TAVILY_API_KEY`, refresh still works, but live web discovery falls back
-to free sources and DuckDuckGo HTML. For the deployed app to match the local
-Tavily-backed behavior, set `TAVILY_API_KEY`.
+to free sources and DuckDuckGo HTML. Tavily is only used when the key is present
+and the dashboard's Tavily search toggle is enabled for that refresh.
 
 ## Persistent SQLite
 

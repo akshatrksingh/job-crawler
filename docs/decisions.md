@@ -34,7 +34,6 @@ Planned crawl sources:
 - Greenhouse startup career pages.
 - Lever startup career pages.
 - Ashby startup career pages.
-- Hacker News Who is Hiring through the public Algolia API.
 - YC Work at a Startup board, using visible public pages unless a stable free API
   is identified and approved.
 
@@ -48,8 +47,8 @@ Discovery requirements:
 - Live source discovery should prefer an explicit search API over direct Google
   scraping.
 - Tavily is the approved optional live web discovery provider when
-  `TAVILY_API_KEY` is set. It should use bounded basic searches and only extract
-  supported ATS URLs.
+  `TAVILY_API_KEY` is set and the dashboard refresh toggle is enabled. It should
+  use bounded basic searches and only extract supported ATS URLs.
 - Tavily discovery should run roughly 100 targeted searches per refresh by
   default, spanning AI/ML/SWE/data/founding role groups, early-career wording,
   broad US targeting, and major cities such as NYC, SF, Seattle, Boston, Austin,
@@ -57,15 +56,14 @@ Discovery requirements:
 - Persist an adaptive Tavily/web-discovery query budget. Start near 100 queries,
   back off by 10 after failures or empty discovery runs, never go below 10, and
   recover upward by 10 after successful discovery.
-- Without a Tavily key, refresh must still work at $0 using stored ATS sources,
-  GitHub-maintained job boards, YC, HN, and a conservative DuckDuckGo HTML
-  fallback.
+- Without Tavily enabled, refresh must still work at $0 using stored ATS sources,
+  GitHub-maintained job boards, YC, and a conservative DuckDuckGo HTML fallback.
 - Large hardcoded company lists are allowed only as fallback seed data, not as
   the primary discovery strategy.
-- Keep a small curated SF/Bay Area AI startup seed list as a head start for
-  Ashby-heavy startup discovery. This should supplement Tavily/dynamic
-  discovery, not replace it, and quiet or broken seeds should be handled by the
-  adaptive source scheduler.
+- Keep a curated AI startup seed list as a head start for Ashby- and
+  Greenhouse-heavy startup discovery in SF, NYC, Boston, and other major US hubs.
+  This should supplement Tavily/dynamic discovery, not replace it, and quiet or
+  broken seeds should be handled by the adaptive source scheduler.
 
 ## Rate Limits and Cost Control
 
@@ -141,7 +139,9 @@ Discovery requirements:
 - The dashboard refresh button should start a background refresh and poll
   progress so the user can see current phase, completed source count, and ETA.
 - The dashboard may support manual multi-delete. Deletions must be staged in the
-  UI first, then confirmed in a modal before rows are deleted from SQLite.
+  UI first, then confirmed in a modal. Confirmed jobs should be removed from the
+  active `jobs` table but kept as dismissal markers so future refreshes treat
+  them as already seen.
 - Cloud hosting is optional/demo only unless the user explicitly accepts paid
   durable storage. Internet-reachable access should require Basic Auth.
 
@@ -453,3 +453,39 @@ Impact: Tavily is more reliable when a local `.env` has the key. If no key is
 present, DuckDuckGo fallback still runs.
 Temporary or permanent: Permanent.
 Follow-up: Surface the provider used by web discovery if debugging requires it.
+
+### 2026-05-16
+
+Decision changed: Hacker News source.
+Previous plan: Include HN Who is Hiring through Algolia during active refreshes.
+New plan: Remove HN from the active refresh pipeline and dashboard results.
+Reason: User asked to remove the HN source.
+Impact: Refreshes rely on ATS boards, curated job boards, YC, dynamic discovery,
+and curated ATS seeds; old HN rows can remain in SQLite but are hidden from the
+dashboard.
+Temporary or permanent: Permanent unless the user re-adds HN later.
+Follow-up: Remove the dormant HN crawler file if it stays unused.
+
+Decision changed: Tavily opt-in.
+Previous plan: Use Tavily automatically whenever `TAVILY_API_KEY` is available.
+New plan: Use Tavily only when the dashboard refresh toggle is enabled; otherwise
+web discovery uses the free DuckDuckGo fallback.
+Reason: User wants Tavily search to be optional from the frontend.
+Impact: A local key can remain configured without spending Tavily queries on
+every refresh.
+Temporary or permanent: Permanent default.
+Follow-up: Add provider labels to refresh status if debugging requires it.
+
+Decision changed: Curated ATS seed breadth.
+Previous plan: Keep a small SF/Bay Area Ashby-only AI startup seed list.
+New plan: Keep a broader curated Ashby and Greenhouse seed list covering AI
+agent, AI infra, science/biotech, health, fintech, data, and developer-tool
+startups across SF/Bay Area, NYC, Boston, and other major US hubs.
+Reason: User asked for more AI startups and adjacent industries before the next
+refresh, with roles such as founding engineer, member of technical staff, and
+software engineer included in discovery.
+Impact: Stored ATS source discovery has better startup coverage even when live
+search is off or rate-limited.
+Temporary or permanent: Permanent seed layer, still subordinate to dynamic
+discovery and adaptive source scheduling.
+Follow-up: Prune seeds that repeatedly fail or produce no useful roles.

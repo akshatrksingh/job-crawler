@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 SCHEMA_SQL = """
@@ -70,6 +70,24 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_first_seen_at ON jobs(first_seen_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_source ON jobs(source);
 
+CREATE TABLE IF NOT EXISTS dismissed_jobs (
+    id INTEGER PRIMARY KEY,
+    source TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL UNIQUE,
+    company TEXT NOT NULL,
+    title TEXT NOT NULL,
+    location TEXT,
+    url TEXT NOT NULL,
+    dismissed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (source, source_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dismissed_jobs_fingerprint
+    ON dismissed_jobs(fingerprint);
+CREATE INDEX IF NOT EXISTS idx_dismissed_jobs_source
+    ON dismissed_jobs(source, source_id);
+
 CREATE TABLE IF NOT EXISTS app_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
@@ -79,6 +97,7 @@ CREATE TABLE IF NOT EXISTS app_state (
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (1);
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (2);
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (3);
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (4);
 """
 
 SOURCE_SCHEDULING_MIGRATIONS = (

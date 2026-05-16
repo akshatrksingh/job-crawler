@@ -13,7 +13,6 @@ from job_crawler.crawlers.ashby import fetch_ashby_jobs
 from job_crawler.crawlers.base import JobPosting
 from job_crawler.crawlers.github_boards import fetch_default_github_board_jobs
 from job_crawler.crawlers.greenhouse import fetch_greenhouse_jobs
-from job_crawler.crawlers.hn import fetch_hn_who_is_hiring_jobs
 from job_crawler.crawlers.lever import fetch_lever_jobs
 from job_crawler.crawlers.yc import fetch_yc_jobs
 from job_crawler.dashboard import write_dashboard
@@ -28,7 +27,6 @@ from job_crawler.storage import JobRepository, open_database
 JobFetcher = Callable[..., list[JobPosting]]
 SourceFetcher = Callable[..., list[JobPosting]]
 GitHubBoardsFetcher = Callable[..., list[JobPosting]]
-HnFetcher = Callable[..., list[JobPosting]]
 WebDiscoveryFetcher = Callable[..., list]
 ProgressCallback = Callable[[dict[str, object]], None]
 
@@ -131,16 +129,15 @@ def refresh_jobs(
     candidate_limit: int = 10_000,
     ashby_limit: int = 10,
     github_jobs_limit: int = 250,
-    hn_limit: int = 80,
     yc_limit: int = 80,
     web_discovery_queries: int = 100,
     web_discovery_results_per_query: int = 8,
+    use_tavily: bool = False,
     max_sources: int = 500,
     ashby_fetcher: SourceFetcher = fetch_ashby_jobs,
     greenhouse_fetcher: SourceFetcher = fetch_greenhouse_jobs,
     lever_fetcher: SourceFetcher = fetch_lever_jobs,
     github_boards_fetcher: GitHubBoardsFetcher = fetch_default_github_board_jobs,
-    hn_fetcher: HnFetcher = fetch_hn_who_is_hiring_jobs,
     yc_fetcher: JobFetcher = fetch_yc_jobs,
     web_discovery_fetcher: WebDiscoveryFetcher = discover_sources_from_web_search,
     seed_sources: tuple[DiscoveredSource, ...] = SF_AI_STARTUP_SEED_SOURCES,
@@ -167,7 +164,8 @@ def refresh_jobs(
                 phase="source_seeds",
                 message=(
                     f"Loaded {seed_result.seen} curated SF/Bay AI startup "
-                    f"source seed(s); {seed_result.inserted} were new."
+                    f"and major-city AI startup source seed(s); "
+                    f"{seed_result.inserted} were new."
                 ),
             )
         web_discovery_query_budget = _web_discovery_query_budget(
@@ -179,13 +177,14 @@ def refresh_jobs(
             phase="web_discovery",
             message=(
                 f"Running web discovery with up to {web_discovery_query_budget} "
-                "Tavily/DuckDuckGo queries..."
+                f"{'Tavily' if use_tavily else 'DuckDuckGo'} queries..."
             ),
         )
         web_discovery_result = _refresh_web_discovery(
             repo,
             max_queries=web_discovery_query_budget,
             results_per_query=web_discovery_results_per_query,
+            use_tavily=use_tavily,
             fetcher=web_discovery_fetcher,
         )
         source_results.append(web_discovery_result)
@@ -200,14 +199,6 @@ def refresh_jobs(
                 repo,
                 limit=github_jobs_limit,
                 fetcher=github_boards_fetcher,
-            )
-        )
-        source_results.append(
-            _refresh_source(
-                repo,
-                source="hn",
-                fetcher=hn_fetcher,
-                limit=hn_limit,
             )
         )
         source_results.append(
@@ -506,13 +497,18 @@ def _refresh_web_discovery(
     *,
     max_queries: int,
     results_per_query: int,
+    use_tavily: bool,
     fetcher: WebDiscoveryFetcher,
 ) -> SourceRefreshResult:
     crawl_run_id = repo.start_crawl_run(source_type="web_search_discovery")
     sources_seen = 0
     sources_inserted = 0
     try:
-        sources = fetcher(max_queries=max_queries, results_per_query=results_per_query)
+        sources = fetcher(
+            max_queries=max_queries,
+            results_per_query=results_per_query,
+            use_tavily=use_tavily,
+        )
         sources_seen = len(sources)
         before = _source_keys(repo)
         for source in sources:

@@ -39,6 +39,8 @@ def select_dashboard_jobs(
     cutoff = current_date - timedelta(days=days)
     selected: list[DashboardJob] = []
     for job in jobs:
+        if job.source == "hn":
+            continue
         if job.source == "yc" and "/jobs/role/" in job.url:
             continue
         if not is_target_role(job):
@@ -149,6 +151,21 @@ def render_dashboard(
       justify-content: end;
       flex-wrap: wrap;
       text-align: right;
+    }}
+    .toggle {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      color: var(--muted);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      white-space: nowrap;
+    }}
+    .toggle input {{
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
     }}
     button {{
       min-height: 40px;
@@ -318,6 +335,10 @@ def render_dashboard(
         <div class="meta">{len(selected)} jobs from the last {days} days</div>
       </div>
       <div class="actions">
+        <label class="toggle" title="Use Tavily for live ATS source search when TAVILY_API_KEY is configured">
+          <input id="use-tavily" type="checkbox">
+          Tavily search
+        </label>
         <button id="refresh" type="button">Refresh</button>
         <div id="status" class="status">{escape(refresh["status"])}</div>
       </div>
@@ -326,7 +347,10 @@ def render_dashboard(
 
     <div class="bulk-actions">
       <span id="selection-summary">No jobs selected</span>
-      <button class="secondary" id="delete-selected" type="button" disabled>Save deletions</button>
+      <span>
+        <button class="secondary" id="select-page" type="button">Select page</button>
+        <button class="secondary" id="delete-selected" type="button" disabled>Save deletions</button>
+      </span>
     </div>
     <div class="table-wrap">
       <table>
@@ -401,11 +425,13 @@ def render_dashboard(
     const rows = Array.from(document.querySelectorAll("#jobs tr"));
     const empty = document.getElementById("empty");
     const refresh = document.getElementById("refresh");
+    const useTavily = document.getElementById("use-tavily");
     const status = document.getElementById("status");
     const prev = document.getElementById("prev");
     const next = document.getElementById("next");
     const summary = document.getElementById("page-summary");
     const selectionSummary = document.getElementById("selection-summary");
+    const selectPage = document.getElementById("select-page");
     const deleteSelected = document.getElementById("delete-selected");
     const deleteModal = document.getElementById("delete-modal");
     const deleteMessage = document.getElementById("delete-message");
@@ -430,6 +456,7 @@ def render_dashboard(
       const shownStart = filteredRows.length === 0 ? 0 : start + 1;
       const shownEnd = Math.min(end, filteredRows.length);
       summary.textContent = `${{shownStart}}-${{shownEnd}} of ${{filteredRows.length}} jobs`;
+      renderSelection();
     }}
 
     prev.addEventListener("click", () => {{
@@ -451,6 +478,16 @@ def render_dashboard(
       }} else {{
         selectedJobs.delete(jobId);
         row.classList.remove("pending-delete");
+      }}
+      renderSelection();
+    }});
+    selectPage.addEventListener("click", () => {{
+      for (const row of currentPageRows()) {{
+        const checkbox = row.querySelector(".delete-toggle");
+        if (!checkbox || checkbox.disabled) continue;
+        checkbox.checked = true;
+        selectedJobs.add(checkbox.dataset.jobId);
+        row.classList.add("pending-delete");
       }}
       renderSelection();
     }});
@@ -483,7 +520,11 @@ def render_dashboard(
       refresh.disabled = true;
       status.textContent = "Starting refresh...";
       try {{
-        const response = await fetch("/api/refresh", {{ method: "POST" }});
+        const response = await fetch("/api/refresh", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify({{ use_tavily: useTavily.checked }}),
+        }});
         if (!response.ok) throw new Error("refresh failed");
         await response.json();
         pollRefresh();
@@ -529,10 +570,22 @@ def render_dashboard(
     }}
     function renderSelection() {{
       const count = selectedJobs.size;
+      const visibleSelectableCount = currentPageRows()
+        .filter((row) => {{
+          const checkbox = row.querySelector(".delete-toggle");
+          return checkbox && !checkbox.disabled;
+        }})
+        .length;
       selectionSummary.textContent = count === 0
         ? "No jobs selected"
         : `${{count}} job${{count === 1 ? "" : "s"}} selected for deletion`;
       deleteSelected.disabled = count === 0;
+      selectPage.disabled = visibleSelectableCount === 0;
+    }}
+    function currentPageRows() {{
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize;
+      return filteredRows.slice(start, end);
     }}
     renderPage();
     renderSelection();
@@ -632,7 +685,7 @@ def _render_refresh_warning(refresh_runs: list[Mapping[str, Any]]) -> str:
     error = str(_row_value(web_discovery_run, "error") or "web discovery failed")
     return (
         '<div class="warning">'
-        "Tavily/web discovery failed for this refresh, so latest newly discovered "
+        "Web discovery failed for this refresh, so latest newly discovered "
         "company boards may be missing. Other sources still refreshed. "
         f"Next refresh will try discovery again. <span>{escape(error)}</span>"
         "</div>"

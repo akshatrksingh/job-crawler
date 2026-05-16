@@ -135,7 +135,7 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         return [make_job("greenhouse", "1", "Software Engineer")]
 
     def fake_lever_fetcher(site: str, company: str, limit: int):
-        assert site in {"example-lever", "hn-ai"}
+        assert site == "example-lever"
         assert company == site
         assert limit == 3
         return [make_job("lever", "1", "Machine Learning Engineer")]
@@ -158,23 +158,14 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         assert limit == 5
         return [make_job("yc", "1", "Founding Engineer")]
 
-    def fake_hn_fetcher(limit: int):
-        assert limit == 6
-        return [
-            JobPosting(
-                source="hn",
-                source_id="1",
-                company="HN Co",
-                title="Applied AI Engineer",
-                location="New York, NY",
-                url="https://jobs.lever.co/hn-ai/job-1",
-                description="Entry level AI role.",
-            )
-        ]
-
-    def fake_web_discovery_fetcher(max_queries: int, results_per_query: int):
+    def fake_web_discovery_fetcher(
+        max_queries: int,
+        results_per_query: int,
+        use_tavily: bool,
+    ):
         assert max_queries == 2
         assert results_per_query == 3
+        assert use_tavily is True
         return [
             DiscoveredSource(
                 source_type="ashby",
@@ -190,47 +181,42 @@ def test_refresh_jobs_fetches_stored_ats_sources(tmp_path) -> None:
         output_path=output_path,
         ashby_limit=3,
         github_jobs_limit=4,
-        hn_limit=6,
         yc_limit=5,
         web_discovery_queries=2,
         web_discovery_results_per_query=3,
+        use_tavily=True,
         ashby_fetcher=fake_ashby_fetcher,
         greenhouse_fetcher=fake_greenhouse_fetcher,
         lever_fetcher=fake_lever_fetcher,
         github_boards_fetcher=fake_github_boards_fetcher,
-        hn_fetcher=fake_hn_fetcher,
         yc_fetcher=fake_yc_fetcher,
         web_discovery_fetcher=fake_web_discovery_fetcher,
         seed_sources=(),
         ats_workers=1,
     )
 
-    assert result.seen == 10
-    assert result.inserted == 9
-    assert [source.source for source in result.sources[:4]] == [
+    assert result.seen == 8
+    assert result.inserted == 8
+    assert [source.source for source in result.sources[:3]] == [
         "web_search_discovery",
         "github_jobs:default_boards",
-        "hn",
         "yc",
     ]
-    assert set(source.source for source in result.sources[4:]) == {
+    assert set(source.source for source in result.sources[3:]) == {
         "ashby:board-co",
         "ashby:discovered-ai",
         "ashby:example-company",
         "greenhouse:example-gh",
         "lever:example-lever",
-        "lever:hn-ai",
     }
     assert output_path.exists()
     assert "AI Engineer" in output_path.read_text(encoding="utf-8")
     with open_database(db_path) as connection:
         repo = JobRepository(connection)
         ashby_slugs = [row["slug"] for row in repo.list_sources(source_type="ashby")]
-        lever_slugs = [row["slug"] for row in repo.list_sources(source_type="lever")]
         query_budget = repo.get_app_state("web_discovery_query_budget")
     assert "board-co" in ashby_slugs
     assert "discovered-ai" in ashby_slugs
-    assert "hn-ai" in lever_slugs
     assert query_budget == "2"
 
 
@@ -265,9 +251,8 @@ def test_refresh_jobs_only_fetches_due_ats_sources(tmp_path) -> None:
         output_path=output_path,
         max_sources=10,
         github_boards_fetcher=lambda limit: [],
-        hn_fetcher=lambda limit: [],
         yc_fetcher=lambda limit: [],
-        web_discovery_fetcher=lambda max_queries, results_per_query: [],
+        web_discovery_fetcher=lambda max_queries, results_per_query, use_tavily: [],
         ashby_fetcher=fake_ashby_fetcher,
         seed_sources=(),
     )
@@ -293,9 +278,8 @@ def test_refresh_jobs_records_timed_out_ats_source(tmp_path) -> None:
         max_sources=1,
         source_timeout_seconds=0.01,
         github_boards_fetcher=lambda limit: [],
-        hn_fetcher=lambda limit: [],
         yc_fetcher=lambda limit: [],
-        web_discovery_fetcher=lambda max_queries, results_per_query: [],
+        web_discovery_fetcher=lambda max_queries, results_per_query, use_tavily: [],
         ashby_fetcher=slow_ashby_fetcher,
         seed_sources=(),
     )
@@ -315,22 +299,25 @@ def test_refresh_jobs_backs_off_web_discovery_query_budget_on_error(tmp_path) ->
     with open_database(db_path) as connection:
         JobRepository(connection).set_app_state("web_discovery_query_budget", "40")
 
-    def failing_web_discovery_fetcher(max_queries: int, results_per_query: int):
+    def failing_web_discovery_fetcher(
+        max_queries: int,
+        results_per_query: int,
+        use_tavily: bool,
+    ):
         assert max_queries == 40
         assert results_per_query == 3
+        assert use_tavily is False
         raise RuntimeError("tavily unavailable")
 
     result = refresh_jobs(
         db_path=db_path,
         output_path=output_path,
         github_jobs_limit=1,
-        hn_limit=1,
         yc_limit=1,
         web_discovery_queries=99,
         web_discovery_results_per_query=3,
         max_sources=0,
         github_boards_fetcher=lambda limit: [],
-        hn_fetcher=lambda limit: [],
         yc_fetcher=lambda limit: [],
         web_discovery_fetcher=failing_web_discovery_fetcher,
         seed_sources=(),
@@ -352,14 +339,12 @@ def test_refresh_jobs_never_backs_off_web_discovery_below_ten(tmp_path) -> None:
         db_path=db_path,
         output_path=output_path,
         github_jobs_limit=1,
-        hn_limit=1,
         yc_limit=1,
         web_discovery_queries=99,
         max_sources=0,
         github_boards_fetcher=lambda limit: [],
-        hn_fetcher=lambda limit: [],
         yc_fetcher=lambda limit: [],
-        web_discovery_fetcher=lambda max_queries, results_per_query: [],
+        web_discovery_fetcher=lambda max_queries, results_per_query, use_tavily: [],
         seed_sources=(),
     )
 
@@ -391,9 +376,8 @@ def test_refresh_jobs_upserts_seed_sources_before_fetching_due_ats_sources(tmp_p
         db_path=db_path,
         output_path=output_path,
         github_boards_fetcher=lambda limit: [],
-        hn_fetcher=lambda limit: [],
         yc_fetcher=lambda limit: [],
-        web_discovery_fetcher=lambda max_queries, results_per_query: [],
+        web_discovery_fetcher=lambda max_queries, results_per_query, use_tavily: [],
         ashby_fetcher=fake_ashby_fetcher,
         seed_sources=seed_sources,
         max_sources=1,

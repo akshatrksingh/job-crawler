@@ -151,7 +151,7 @@ def test_render_dashboard_warns_when_web_discovery_fails() -> None:
         ],
     )
 
-    assert "Tavily/web discovery failed" in html
+    assert "Web discovery failed" in html
     assert "Other sources still refreshed" in html
     assert "Next refresh will try discovery again" in html
     assert "429 too many requests" in html
@@ -173,7 +173,7 @@ def test_render_dashboard_does_not_warn_when_web_discovery_succeeds() -> None:
         ],
     )
 
-    assert "Tavily/web discovery failed" not in html
+    assert "Web discovery failed" not in html
 
 
 def test_render_dashboard_has_no_manual_discovery_controls() -> None:
@@ -340,7 +340,7 @@ def test_render_dashboard_excludes_non_target_roles() -> None:
     assert "Social Co" not in html
 
 
-def test_render_dashboard_includes_hn_jobs() -> None:
+def test_render_dashboard_excludes_hn_jobs() -> None:
     today = date(2026, 4, 29)
     html = render_dashboard(
         [
@@ -362,7 +362,7 @@ def test_render_dashboard_includes_hn_jobs() -> None:
         today=today,
     )
 
-    assert "HN Co" in html
+    assert "HN Co" not in html
     assert "YC Co" in html
 
 
@@ -426,9 +426,17 @@ def test_render_dashboard_supports_staged_multi_delete() -> None:
 
     assert 'data-job-id="123"' in html
     assert 'id="delete-selected"' in html
+    assert 'id="select-page"' in html
     assert 'id="delete-modal"' in html
     assert "/api/jobs/delete" in html
     assert "jobs selected for deletion. Are you sure?" in html
+
+
+def test_render_dashboard_has_tavily_refresh_toggle() -> None:
+    html = render_dashboard([])
+
+    assert 'id="use-tavily"' in html
+    assert "use_tavily" in html
 
 
 def test_write_dashboard_creates_index_html(tmp_path) -> None:
