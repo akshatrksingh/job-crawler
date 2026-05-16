@@ -196,35 +196,40 @@ def test_render_dashboard_has_no_manual_discovery_controls() -> None:
     assert "/api/discover-pages" not in html
 
 
-def test_select_dashboard_jobs_interleaves_location_buckets() -> None:
+def test_select_dashboard_jobs_orders_newest_fetches_first() -> None:
     today = date(2026, 4, 29)
     jobs = [
         make_job(
-            f"Software Engineer SF {index}",
-            f"SF Co {index}",
+            "Software Engineer SF",
+            "Older SF Co",
             "San Francisco",
             datetime(2026, 4, 28, tzinfo=UTC),
+            first_seen_at=datetime(2026, 4, 28, 10, 0, tzinfo=UTC),
         )
-        for index in range(8)
     ] + [
         make_job(
             "Software Engineer Seattle",
-            "Seattle Co",
+            "Newest Seattle Co",
             "Seattle, WA",
             datetime(2026, 4, 28, tzinfo=UTC),
+            first_seen_at=datetime(2026, 4, 29, 10, 0, tzinfo=UTC),
         ),
         make_job(
             "Software Engineer Boston",
-            "Boston Co",
+            "Middle Boston Co",
             "Boston, US",
             datetime(2026, 4, 28, tzinfo=UTC),
+            first_seen_at=datetime(2026, 4, 29, 9, 0, tzinfo=UTC),
         ),
     ]
 
     selected = select_dashboard_jobs(jobs, today=today)
 
-    assert [job.company for job in selected[:3]] == ["SF Co 0", "Boston Co", "Seattle Co"]
-    assert [job.company for job in selected[:4]].count("SF Co 0") == 1
+    assert [job.company for job in selected] == [
+        "Newest Seattle Co",
+        "Middle Boston Co",
+        "Older SF Co",
+    ]
 
 
 def test_render_dashboard_excludes_senior_roles() -> None:

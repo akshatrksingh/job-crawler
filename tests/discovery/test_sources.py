@@ -110,7 +110,7 @@ def test_store_discovered_sources_in_sqlite() -> None:
 def test_ai_startup_seed_sources_are_unique_ats_sources() -> None:
     keys = [(source.source_type, source.slug) for source in SF_AI_STARTUP_SEED_SOURCES]
 
-    assert len(SF_AI_STARTUP_SEED_SOURCES) >= 50
+    assert len(SF_AI_STARTUP_SEED_SOURCES) >= 70
     assert len(keys) == len(set(keys))
     assert {source.source_type for source in SF_AI_STARTUP_SEED_SOURCES} == {
         "ashby",
@@ -119,4 +119,7 @@ def test_ai_startup_seed_sources_are_unique_ats_sources() -> None:
     assert ("ashby", "eloquentai") in keys
     assert ("ashby", "mercator") in keys
     assert ("ashby", "pytho-ai") in keys
+    assert ("ashby", "Greenboard") in keys
+    assert ("ashby", "salient") in keys
+    assert ("ashby", "sfcompute") in keys
     assert ("greenhouse", "anthropic") in keys

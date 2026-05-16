@@ -130,7 +130,7 @@ def refresh_jobs(
     ashby_limit: int = 10,
     github_jobs_limit: int = 250,
     yc_limit: int = 80,
-    web_discovery_queries: int = 100,
+    web_discovery_queries: int = 150,
     web_discovery_results_per_query: int = 8,
     use_tavily: bool = False,
     max_sources: int = 500,
@@ -163,8 +163,8 @@ def refresh_jobs(
                 progress_callback,
                 phase="source_seeds",
                 message=(
-                    f"Loaded {seed_result.seen} curated SF/Bay AI startup "
-                    f"and major-city AI startup source seed(s); "
+                    f"Loaded {seed_result.seen} curated AI startup "
+                    f"source seed(s); "
                     f"{seed_result.inserted} were new."
                 ),
             )

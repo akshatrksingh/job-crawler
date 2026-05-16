@@ -37,15 +37,18 @@ def test_build_discovery_queries_interleaves_sources_before_next_role() -> None:
 
 
 def test_default_web_discovery_queries_cover_roles_locations_and_experience() -> None:
-    joined = "\n".join(DEFAULT_WEB_DISCOVERY_QUERIES[:100])
+    joined = "\n".join(DEFAULT_WEB_DISCOVERY_QUERIES[:150])
 
-    assert len(DEFAULT_WEB_DISCOVERY_QUERIES) == 100
+    assert len(DEFAULT_WEB_DISCOVERY_QUERIES) == 150
     assert "site:jobs.ashbyhq.com" in joined
     assert "site:boards.greenhouse.io" in joined
     assert "site:jobs.lever.co" in joined
     assert '"ai engineer"' in joined
     assert '"applied ai engineer"' in joined
+    assert '"founding applied ai engineer"' in joined
     assert '"machine learning engineer"' in joined
+    assert '"ml infrastructure engineer"' in joined
+    assert '"ai platform engineer"' in joined
     assert '"software engineer"' in joined
     assert '"backend engineer"' in joined
     assert '"founding engineer"' in joined

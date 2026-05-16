@@ -25,6 +25,7 @@ class DashboardJob:
     source: str
     role: str
     seen_date: date
+    first_seen_at: datetime
     rank_score: int
 
 
@@ -63,19 +64,21 @@ def select_dashboard_jobs(
                 source=job.source,
                 role=role_category(job.title),
                 seen_date=_seen_date(job),
+                first_seen_at=_seen_at(job),
                 rank_score=ranked.score,
             )
         )
     ranked = sorted(
         selected,
         key=lambda job: (
-            -_date_to_ordinal(job.seen_date),
+            -_datetime_to_epoch(job.first_seen_at),
             -job.rank_score,
+            -(job.id or 0),
             job.company.lower(),
             job.title.lower(),
         ),
     )
-    return _interleave_location_buckets(ranked)
+    return ranked
 
 
 def render_dashboard(
@@ -706,62 +709,28 @@ def _render_empty_refresh_run() -> str:
     )
 
 
-def _interleave_location_buckets(jobs: list[DashboardJob]) -> list[DashboardJob]:
-    """Keep high-ranked jobs while avoiding one metro dominating the first pages."""
-    buckets: dict[str, list[DashboardJob]] = {}
-    bucket_order: list[str] = []
-    for job in jobs:
-        bucket = _location_bucket(job.location)
-        if bucket not in buckets:
-            buckets[bucket] = []
-            bucket_order.append(bucket)
-        buckets[bucket].append(job)
-
-    interleaved: list[DashboardJob] = []
-    while any(buckets.values()):
-        for bucket in list(bucket_order):
-            if buckets[bucket]:
-                interleaved.append(buckets[bucket].pop(0))
-    return interleaved
-
-
-def _location_bucket(location: str) -> str:
-    value = location.lower()
-    bucket_keywords = (
-        ("seattle", ("seattle", "seatle")),
-        ("boston", ("boston", "cambridge")),
-        ("austin", ("austin",)),
-        ("denver", ("denver",)),
-        ("los-angeles", ("los angeles",)),
-        ("dc", ("washington", "d.c.", "dc")),
-        ("chicago", ("chicago",)),
-        ("atlanta", ("atlanta",)),
-        ("portland", ("portland",)),
-        ("raleigh-durham", ("raleigh", "durham", "chapel hill")),
-        ("sf-bay", ("san francisco", "sf", "bay area", "foster city", "sunnyvale")),
-        ("nyc", ("new york", "nyc")),
-        ("remote-us", ("united states", "usa", "remote us", "remote (united states)")),
-    )
-    for bucket, keywords in bucket_keywords:
-        if any(keyword in value for keyword in keywords):
-            return bucket
-    if value == "remote":
-        return "remote"
-    return "other-us"
-
-
 def _window_date(job: JobPosting) -> date:
     return _seen_date(job)
 
 
 def _seen_date(job: JobPosting) -> date:
+    return _seen_at(job).date()
+
+
+def _seen_at(job: JobPosting) -> datetime:
     if job.first_seen_at is not None:
-        return job.first_seen_at.date()
-    return datetime.now(UTC).date()
+        return _normalize_datetime(job.first_seen_at)
+    return datetime.now(UTC)
 
 
-def _date_to_ordinal(value: date) -> int:
-    return value.toordinal()
+def _datetime_to_epoch(value: datetime) -> float:
+    return _normalize_datetime(value).timestamp()
+
+
+def _normalize_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def _refresh_metadata(last_refresh_at: str | None) -> dict[str, object]:

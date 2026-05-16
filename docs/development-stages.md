@@ -129,7 +129,8 @@ Goal:
 - Keep a curated AI startup seed list as a fallback/head-start layer for
   Ashby- and Greenhouse-heavy startup discovery across SF, NYC, Boston, and
   other major US hubs.
-- Keep Tavily discovery around 100 targeted searches by default.
+- Keep Tavily discovery around 150 targeted searches by default, weighted toward
+  Ashby and applied AI/ML role families.
 - Back off the web-discovery query budget by 10 after failures or empty runs,
   down to a floor of 10, and recover by 10 after successful discovery.
 - Keep individual ATS company-board crawls capped at 10 jobs by default.

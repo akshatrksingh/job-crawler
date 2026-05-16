@@ -49,11 +49,12 @@ Discovery requirements:
 - Tavily is the approved optional live web discovery provider when
   `TAVILY_API_KEY` is set and the dashboard refresh toggle is enabled. It should
   use bounded basic searches and only extract supported ATS URLs.
-- Tavily discovery should run roughly 100 targeted searches per refresh by
-  default, spanning AI/ML/SWE/data/founding role groups, early-career wording,
+- Tavily discovery should run roughly 150 targeted searches per refresh by
+  default, weighted toward Ashby and spanning AI engineer, applied AI, ML, AI
+  infrastructure/platform, SWE/data/founding role groups, early-career wording,
   broad US targeting, and major cities such as NYC, SF, Seattle, Boston, Austin,
   Los Angeles, Chicago, Denver, Atlanta, and Washington DC.
-- Persist an adaptive Tavily/web-discovery query budget. Start near 100 queries,
+- Persist an adaptive Tavily/web-discovery query budget. Start near 150 queries,
   back off by 10 after failures or empty discovery runs, never go below 10, and
   recover upward by 10 after successful discovery.
 - Without Tavily enabled, refresh must still work at $0 using stored ATS sources,
@@ -133,7 +134,9 @@ Discovery requirements:
 - Jobs older than the rolling window should be removed from view but remain in
   SQLite.
 - The dashboard should not impose a hard display limit.
-- The dashboard should show newest jobs first.
+- The dashboard should show newest fetched jobs first using the full
+  `first_seen_at` timestamp, with deterministic tie-breakers for jobs found in
+  the same refresh.
 - The dashboard should not include filter controls by default. Jobs are fetched
   broadly across the US and ranked with major-city preference.
 - The dashboard refresh button should start a background refresh and poll
@@ -341,7 +344,7 @@ Follow-up: Add a company-specific "crawl more" control only if needed.
 
 Decision changed: Tavily/web-discovery backoff.
 Previous plan: Run the configured web-discovery query count every refresh.
-New plan: Persist an adaptive query budget in SQLite. Discovery starts near 100
+New plan: Persist an adaptive query budget in SQLite. Discovery starts near 150
 queries, drops by 10 after failures or empty runs until a floor of 10, and
 recovers by 10 after successful discovery.
 Reason: A flaky search connection can otherwise make refresh feel stuck and burn
@@ -489,3 +492,30 @@ search is off or rate-limited.
 Temporary or permanent: Permanent seed layer, still subordinate to dynamic
 discovery and adaptive source scheduling.
 Follow-up: Prune seeds that repeatedly fail or produce no useful roles.
+
+Decision changed: Dashboard ordering.
+Previous plan: Interleave location buckets after ranking so one metro did not
+dominate the first page.
+New plan: Sort dashboard jobs by full first-fetched timestamp first, then stable
+tie-breakers.
+Reason: User wants newest fetches to appear at the top and stay in that order.
+Impact: A fresh batch can dominate the first page, which is intentional; ranking
+still filters jobs but no longer pulls older locations above newer fetches.
+Temporary or permanent: Permanent unless the dashboard needs a separate ranked
+view later.
+Follow-up: Add a secondary sort control only if strict recency becomes too
+limiting.
+
+Decision changed: Discovery breadth.
+Previous plan: Run roughly 100 web-discovery queries with a moderate Ashby mix
+and a smaller curated ATS seed list.
+New plan: Run roughly 150 web-discovery queries weighted toward Ashby, add more
+applied AI/ML/infrastructure/founding role phrases, and broaden curated Ashby
+startup seeds.
+Reason: User asked to increase Ashby, SF, AI engineer, applied AI, ML engineer,
+and seed-company coverage.
+Impact: Tavily-enabled refreshes search more broadly, while Tavily-off refreshes
+still get broader curated startup coverage before ATS crawling.
+Temporary or permanent: Permanent default.
+Follow-up: Watch refresh duration and source usefulness scores after the next
+large run.

@@ -22,11 +22,12 @@ The pipeline will:
 Optional live web discovery can use Tavily. Put a Tavily key in `.env` as
 `TAVILY_API_KEY=...`, then enable the Tavily search toggle in the dashboard before
 refreshing to search for new Ashby, Greenhouse, and Lever company boards before
-crawling. Discovery runs about 100 bounded searches across AI, ML, SWE, data,
-founding/backend/full-stack/member-of-technical-staff role groups and major US
-cities. The query budget backs off by 10 after discovery failures or empty runs,
-down to a floor of 10. Without the toggle, refresh stays zero-cost and uses the
-built-in job boards, YC, stored ATS boards, and a DuckDuckGo HTML fallback.
+crawling. Discovery runs about 150 bounded searches, weighted toward Ashby and
+covering AI engineer, applied AI, ML, AI platform/infrastructure, founding, SWE,
+and member-of-technical-staff role groups across major US cities. The query
+budget backs off by 10 after discovery failures or empty runs, down to a floor
+of 10. Without the toggle, refresh stays zero-cost and uses the built-in job
+boards, YC, stored ATS boards, and a DuckDuckGo HTML fallback.
 
 Refresh also keeps a curated AI startup seed list for Ashby and Greenhouse boards.
 This is only a head start for startup-heavy discovery; the adaptive scheduler
